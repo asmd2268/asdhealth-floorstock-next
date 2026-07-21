@@ -1,9 +1,9 @@
-import { can } from "@/domain/access/permissions";
+import { resolveScopedPermission } from "@/domain/access/permissions";
 import type {
   PermissionAction,
   PermissionOverride,
   ResourceId,
-  RoleId,
+  ScopedRoleAssignment,
 } from "@/domain/access/types";
 import type { FeatureFlagSet, UserScope } from "@/domain/platform/types";
 
@@ -43,7 +43,7 @@ export const navigationItems: readonly NavigationItem[] = [
 ];
 
 export interface NavigationContext {
-  role: RoleId;
+  roleAssignments: readonly ScopedRoleAssignment[];
   subjectScope: UserScope;
   targetScope: UserScope;
   featureFlags: FeatureFlagSet;
@@ -53,15 +53,16 @@ export interface NavigationContext {
 export function getVisibleNavigation(
   context: NavigationContext,
 ): readonly NavigationItem[] {
-  return navigationItems.filter((item) =>
-    can({
-      role: context.role,
-      resource: item.resource,
-      action: item.action,
-      subjectScope: context.subjectScope,
-      targetScope: context.targetScope,
-      featureFlags: context.featureFlags,
-      overrides: context.overrides,
-    }),
+  return navigationItems.filter(
+    (item) =>
+      resolveScopedPermission({
+        roleAssignments: context.roleAssignments,
+        resource: item.resource,
+        action: item.action,
+        subjectScope: context.subjectScope,
+        targetScope: context.targetScope,
+        featureFlags: context.featureFlags,
+        overrides: context.overrides,
+      }).allowed,
   );
 }

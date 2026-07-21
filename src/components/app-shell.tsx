@@ -11,10 +11,10 @@ import {
 
 import { getSafeLogoUrl } from "@/config/platform";
 import { roleIds, type RoleId } from "@/domain/access/types";
+import type { AuthenticatedUser } from "@/domain/auth/types";
 import type {
   BrandingConfiguration,
   FeatureFlagSet,
-  UserScope,
 } from "@/domain/platform/types";
 import { getDictionary, getDirection, type Locale } from "@/i18n/dictionaries";
 import { serializeLocaleCookie } from "@/i18n/locale";
@@ -23,7 +23,6 @@ import {
   type NavigationItem,
   type NavigationItemId,
 } from "@/navigation/navigation";
-import type { AuthenticatedUser } from "@/services/contracts/auth";
 
 import {
   ArrowIcon,
@@ -98,28 +97,43 @@ function useMobileViewport(): boolean {
 export interface AppShellProps {
   authenticatedUser: AuthenticatedUser;
   branding: BrandingConfiguration;
-  enableDemoRoleSwitcher: boolean;
   featureFlags: FeatureFlagSet;
   initialLocale: Locale;
-  targetScope: UserScope;
 }
 
-export function AppShell({
+interface AppShellContentProps extends AppShellProps {
+  demoRoleSwitcher: boolean;
+}
+
+function AppShellContent({
   authenticatedUser,
   branding,
-  enableDemoRoleSwitcher,
+  demoRoleSwitcher,
   featureFlags,
   initialLocale,
-  targetScope,
-}: AppShellProps) {
+}: AppShellContentProps) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
-  const [demoRole, setDemoRole] = useState<RoleId>(authenticatedUser.role);
+  const [demoRole, setDemoRole] = useState<RoleId>(
+    authenticatedUser.roleAssignments.at(0)?.role ??
+      "external_pharmacy_supervisor",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const wasSidebarOpen = useRef(false);
   const isMobile = useMobileViewport();
-  const role = enableDemoRoleSwitcher ? demoRole : authenticatedUser.role;
+  const roleAssignments = useMemo(
+    () =>
+      demoRoleSwitcher
+        ? [{ role: demoRole, scope: authenticatedUser.activeScope }]
+        : authenticatedUser.roleAssignments,
+    [
+      authenticatedUser.activeScope,
+      authenticatedUser.roleAssignments,
+      demoRole,
+      demoRoleSwitcher,
+    ],
+  );
   const dictionary = getDictionary(locale);
   const direction = getDirection(locale);
   const drawerHidden = isMobile && !sidebarOpen;
@@ -156,12 +170,18 @@ export function AppShell({
   const navigation = useMemo(
     () =>
       getVisibleNavigation({
-        role,
-        subjectScope: authenticatedUser.scope,
-        targetScope,
+        roleAssignments,
+        subjectScope: authenticatedUser.activeScope,
+        targetScope: authenticatedUser.activeScope,
         featureFlags,
+        overrides: authenticatedUser.explicitPermissionOverrides,
       }),
-    [authenticatedUser.scope, featureFlags, role, targetScope],
+    [
+      authenticatedUser.activeScope,
+      authenticatedUser.explicitPermissionOverrides,
+      featureFlags,
+      roleAssignments,
+    ],
   );
   const modules = navigation.filter(isModuleItem);
   const shellStyle = {
@@ -223,8 +243,8 @@ export function AppShell({
         <div className="facility-chip">
           <BuildingIcon />
           <span>
-            <small>{dictionary.shell.demoMode}</small>
-            <strong>{dictionary.shell.hospitalContext}</strong>
+            <small>{dictionary.shell.facilityContext}</small>
+            <strong>{authenticatedUser.activeFacilityId}</strong>
           </span>
         </div>
 
@@ -267,11 +287,15 @@ export function AppShell({
 
           <div className="topbar-context">
             <span className="status-dot" />
-            <span>{dictionary.shell.demoMode}</span>
+            <span>
+              {demoRoleSwitcher
+                ? dictionary.shell.demoMode
+                : dictionary.shell.authenticatedSession}
+            </span>
           </div>
 
           <div className="topbar-controls">
-            {enableDemoRoleSwitcher ? (
+            {demoRoleSwitcher ? (
               <label className="control-field">
                 <span>{dictionary.shell.role}</span>
                 <select
@@ -402,4 +426,12 @@ export function AppShell({
       </div>
     </div>
   );
+}
+
+export function AppShell(props: AppShellProps) {
+  return <AppShellContent {...props} demoRoleSwitcher={false} />;
+}
+
+export function DemoAppShell(props: AppShellProps) {
+  return <AppShellContent {...props} demoRoleSwitcher />;
 }

@@ -7,22 +7,29 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { baseBrand, demoFacilityScope } from "@/config/platform";
-import type { AuthenticatedUser } from "@/services/contracts/auth";
+import { resolveTrustedDemoGate } from "@/config/public-environment";
+import type { AuthenticatedUser } from "@/domain/auth/types";
 
-import { AppShell, type AppShellProps } from "./app-shell";
+import { AppShell, DemoAppShell, type AppShellProps } from "./app-shell";
 
 const authenticatedUser: AuthenticatedUser = {
-  id: "user-1",
+  uid: "user-1",
   email: null,
   displayName: null,
-  role: "pharmacy_manager",
-  scope: demoFacilityScope,
+  tenantId: "demo-tenant",
+  platformId: demoFacilityScope.platformId,
+  organizationId: demoFacilityScope.organizationId,
+  facilityIds: [demoFacilityScope.facilityId],
+  activeFacilityId: demoFacilityScope.facilityId,
+  activeScope: demoFacilityScope,
+  roleAssignments: [{ role: "pharmacy_manager", scope: demoFacilityScope }],
+  explicitPermissionOverrides: [],
+  accountStatus: "active",
 };
 
 const defaultProps: AppShellProps = {
   authenticatedUser,
   branding: baseBrand,
-  enableDemoRoleSwitcher: false,
   featureFlags: {
     announcements: true,
     zebra_labels: true,
@@ -30,7 +37,6 @@ const defaultProps: AppShellProps = {
     controlled_medicines: false,
   },
   initialLocale: "en",
-  targetScope: demoFacilityScope,
 };
 
 function mockMobileViewport(matches: boolean) {
@@ -64,11 +70,37 @@ describe("application shell boundaries", () => {
   it("hides the demo role switcher by default", () => {
     render(<AppShell {...defaultProps} />);
     expect(screen.queryByLabelText("Demo role")).not.toBeInTheDocument();
+    expect(screen.getByText("Authenticated session")).toBeInTheDocument();
+    expect(screen.queryByText("Foundation demo")).not.toBeInTheDocument();
   });
 
   it("shows the demo role switcher only when explicitly enabled", () => {
-    render(<AppShell {...defaultProps} enableDemoRoleSwitcher />);
+    render(<DemoAppShell {...defaultProps} />);
     expect(screen.getByLabelText("Demo role")).toBeInTheDocument();
+  });
+
+  it("cannot enable role substitution through an untrusted AppShell prop", () => {
+    const untrustedProps = {
+      ...defaultProps,
+      enableDemoRoleSwitcher: true,
+    };
+    render(<AppShell {...untrustedProps} />);
+    expect(screen.queryByLabelText("Demo role")).not.toBeInTheDocument();
+    expect(screen.queryByText("Foundation demo")).not.toBeInTheDocument();
+  });
+
+  it("keeps production role switching disabled when the public flag is true", () => {
+    const trustedGate = resolveTrustedDemoGate("production", "true");
+    render(
+      trustedGate ? (
+        <DemoAppShell {...defaultProps} />
+      ) : (
+        <AppShell {...defaultProps} />
+      ),
+    );
+
+    expect(trustedGate).toBe(false);
+    expect(screen.queryByLabelText("Demo role")).not.toBeInTheDocument();
   });
 
   it("uses authenticated identity when demo switching is disabled", () => {
@@ -77,7 +109,12 @@ describe("application shell boundaries", () => {
         {...defaultProps}
         authenticatedUser={{
           ...authenticatedUser,
-          role: "external_pharmacy_supervisor",
+          roleAssignments: [
+            {
+              role: "external_pharmacy_supervisor",
+              scope: demoFacilityScope,
+            },
+          ],
         }}
       />,
     );

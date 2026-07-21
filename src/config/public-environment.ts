@@ -6,11 +6,22 @@ const demoRoleSwitcherSchema = z
   .transform((value) => value === "true");
 
 export function parseDemoRoleSwitcherFlag(value: string | undefined): boolean {
-  return demoRoleSwitcherSchema.parse(value);
+  const result = demoRoleSwitcherSchema.safeParse(value);
+  return result.success ? result.data : false;
 }
 
-export function isDemoRoleSwitcherEnabled(): boolean {
-  return parseDemoRoleSwitcherFlag(
+export function resolveTrustedDemoGate(
+  runtime: string | undefined,
+  explicitFlag: string | undefined,
+): boolean {
+  const isNonProductionRuntime =
+    runtime === "development" || runtime === "test";
+  return isNonProductionRuntime && parseDemoRoleSwitcherFlag(explicitFlag);
+}
+
+export function isTrustedDemoModeEnabled(): boolean {
+  return resolveTrustedDemoGate(
+    process.env.NODE_ENV,
     process.env.NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER,
   );
 }

@@ -22,9 +22,13 @@ const featureFlags = {
   controlled_medicines: false,
 } as const;
 
-function idsFor(role: Parameters<typeof getVisibleNavigation>[0]["role"]) {
+function idsFor(
+  role: Parameters<
+    typeof getVisibleNavigation
+  >[0]["roleAssignments"][number]["role"],
+) {
   return getVisibleNavigation({
-    role,
+    roleAssignments: [{ role, scope }],
     subjectScope: scope,
     targetScope: scope,
     featureFlags,
@@ -66,7 +70,7 @@ describe("navigation visibility", () => {
 
   it("applies feature flags before rendering an otherwise allowed module", () => {
     const visible = getVisibleNavigation({
-      role: "pharmacy_manager",
+      roleAssignments: [{ role: "pharmacy_manager", scope }],
       subjectScope: scope,
       targetScope: scope,
       featureFlags: { ...featureFlags, announcements: false },
@@ -80,7 +84,7 @@ describe("navigation visibility", () => {
     expect(dashboard).toMatchObject({ resource: "dashboard", action: "read" });
 
     const denied = getVisibleNavigation({
-      role: "external_pharmacy_supervisor",
+      roleAssignments: [{ role: "external_pharmacy_supervisor", scope }],
       subjectScope: scope,
       targetScope: scope,
       featureFlags,
