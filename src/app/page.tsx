@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 
 import { DemoAppShell } from "@/components/app-shell";
 import { AuthenticationBoundary } from "@/components/authentication-boundary";
+import { FirebaseAuthenticationBoundary } from "@/components/firebase-authentication-boundary";
 import { baseBrand } from "@/config/platform";
 import { isTrustedDemoModeEnabled } from "@/config/public-environment";
 import { LOCALE_COOKIE_NAME, resolveLocale } from "@/i18n/locale";
@@ -20,8 +21,17 @@ export default async function Home() {
     cookieStore.get(LOCALE_COOKIE_NAME)?.value,
   );
   const trustedDemoGate = isTrustedDemoModeEnabled();
+  if (!trustedDemoGate) {
+    return (
+      <FirebaseAuthenticationBoundary
+        branding={baseBrand}
+        initialLocale={initialLocale}
+      />
+    );
+  }
+
   const bootstrap = await resolveApplicationBootstrap(
-    trustedDemoGate,
+    true,
     unconfiguredProductionSessionService,
     loadExplicitDemoSessionService,
   );

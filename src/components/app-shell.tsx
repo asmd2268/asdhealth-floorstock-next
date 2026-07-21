@@ -23,6 +23,7 @@ import {
   type NavigationItem,
   type NavigationItemId,
 } from "@/navigation/navigation";
+import type { SignOutService } from "@/services/contracts/auth";
 
 import {
   ArrowIcon,
@@ -99,6 +100,7 @@ export interface AppShellProps {
   branding: BrandingConfiguration;
   featureFlags: FeatureFlagSet;
   initialLocale: Locale;
+  signOut?: SignOutService["signOut"];
 }
 
 interface AppShellContentProps extends AppShellProps {
@@ -111,6 +113,7 @@ function AppShellContent({
   demoRoleSwitcher,
   featureFlags,
   initialLocale,
+  signOut,
 }: AppShellContentProps) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [demoRole, setDemoRole] = useState<RoleId>(
@@ -118,6 +121,8 @@ function AppShellContent({
       "external_pharmacy_supervisor",
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const wasSidebarOpen = useRef(false);
@@ -194,6 +199,17 @@ function AppShellContent({
       nextLocale,
       window.location.protocol === "https:",
     );
+  };
+
+  const submitSignOut = async () => {
+    if (!signOut || signingOut) return;
+    setSigningOut(true);
+    setSignOutFailed(false);
+    const result = await signOut();
+    if (!result.ok) {
+      setSigningOut(false);
+      setSignOutFailed(true);
+    }
   };
 
   return (
@@ -327,8 +343,26 @@ function AppShellContent({
                 </select>
               </span>
             </label>
+            {signOut ? (
+              <button
+                className="sign-out-button"
+                disabled={signingOut}
+                onClick={() => void submitSignOut()}
+                type="button"
+              >
+                {signingOut
+                  ? dictionary.auth.signingOut
+                  : dictionary.auth.signOut}
+              </button>
+            ) : null}
           </div>
         </header>
+
+        {signOutFailed ? (
+          <p className="sign-out-error" role="alert">
+            {dictionary.auth.signOutError}
+          </p>
+        ) : null}
 
         <main className="dashboard" id="dashboard">
           <section className="hero-panel">

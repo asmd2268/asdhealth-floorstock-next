@@ -27,7 +27,16 @@ export interface Dictionary {
     passwordLabel: string;
     passwordPlaceholder: string;
     signIn: string;
+    signingIn: string;
     signInUnavailable: string;
+    emailInvalid: string;
+    passwordRequired: string;
+    invalidCredentials: string;
+    tooManyAttempts: string;
+    signInError: string;
+    signOut: string;
+    signingOut: string;
+    signOutError: string;
     accessDeniedTitle: string;
     accessDeniedDescription: string;
     errorTitle: string;
@@ -93,7 +102,16 @@ const en: Dictionary = {
     passwordLabel: "Password",
     passwordPlaceholder: "Enter your password",
     signIn: "Sign in",
+    signingIn: "Signing in…",
     signInUnavailable: "Authentication connection is not enabled yet.",
+    emailInvalid: "Enter a valid email address.",
+    passwordRequired: "Enter your password.",
+    invalidCredentials: "Email or password is incorrect.",
+    tooManyAttempts: "Too many attempts. Please try again later.",
+    signInError: "Sign-in is unavailable. Please try again later.",
+    signOut: "Sign out",
+    signingOut: "Signing out…",
+    signOutError: "Sign-out failed. Please try again.",
     accessDeniedTitle: "Access denied",
     accessDeniedDescription:
       "Your account does not have a valid tenant, facility, or role assignment.",
@@ -179,7 +197,16 @@ const ar: Dictionary = {
     passwordLabel: "كلمة المرور",
     passwordPlaceholder: "أدخل كلمة المرور",
     signIn: "تسجيل الدخول",
+    signingIn: "جارٍ تسجيل الدخول…",
     signInUnavailable: "ربط خدمة المصادقة غير مفعّل حاليًا.",
+    emailInvalid: "أدخل بريدًا إلكترونيًا صالحًا.",
+    passwordRequired: "أدخل كلمة المرور.",
+    invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    tooManyAttempts: "محاولات كثيرة جدًا. يرجى المحاولة لاحقًا.",
+    signInError: "تسجيل الدخول غير متاح. يرجى المحاولة لاحقًا.",
+    signOut: "تسجيل الخروج",
+    signingOut: "جارٍ تسجيل الخروج…",
+    signOutError: "تعذر تسجيل الخروج. يرجى المحاولة مرة أخرى.",
     accessDeniedTitle: "تم رفض الوصول",
     accessDeniedDescription:
       "لا يملك حسابك ارتباطًا صالحًا بالمستأجر أو المنشأة أو الدور.",

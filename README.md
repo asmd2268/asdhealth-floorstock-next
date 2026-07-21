@@ -15,8 +15,8 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/i18n` contains the English and Arabic dictionaries, locale types, and direction mapping. UI components consume dictionary values rather than embedding user-facing strings.
 - `src/navigation` declares permission metadata and canonical targets once, then resolves every navigation item through the permission engine.
 - `src/services/contracts` defines framework-independent authentication-provider, user-profile, role-assignment, tenant-directory, session, sign-in, sign-out, and Firestore boundaries without business collections.
-- `src/services/auth` composes those contracts into session resolution. The production service is intentionally unconfigured and signed out; the demo service is selected only by the explicit server-read demo flag.
-- `src/services/firebase` validates public browser configuration with Zod and lazily initializes Firebase only when a browser caller requests it.
+- `src/services/auth` composes provider identity with trusted session resolution and coordinates auth-state changes without mixing authentication with authorization. Trusted production profile, role, and tenant repositories remain intentionally unconfigured and fail closed.
+- `src/services/firebase` validates public browser configuration with Zod, lazily initializes one named browser app and Auth instance, and adapts Firebase identities and failures into application-owned types.
 
 The checked-in demo represents one hospital. Its types and scope checks support platform-wide, organization/regional, and facility-specific assignments so additional hospitals and multiple roles per user can be introduced without changing the authorization model.
 
@@ -28,7 +28,9 @@ The session resolver treats provider identity as proof of identity only. Tenant 
 
 Role assignments remain scoped and are evaluated centrally for each permission target. Explicit deny overrides explicit allow, and navigation visibility is only a presentation result of authorization—it is never an authorization source. Trusted authorization state is not stored in local storage.
 
-No Firebase authentication adapter is active yet. Production mode renders the signed-out boundary with every feature disabled and cannot fall back to demo identity or demo tenant flags. Sign-in controls are intentionally disabled placeholders until a production session mechanism and trusted repositories are connected.
+The browser Firebase Authentication adapter supports current identity resolution, auth-state subscription, email/password sign-in, and sign-out. Firebase identity proves identity only: the application does not read custom claims or derive tenant, facility, role, permission, account status, or feature flags from the client SDK. Raw Firebase errors are normalized before reaching UI code, and credential failures use one generic message to avoid account enumeration.
+
+Production starts in a loading state while Firebase resolves. Signed-out identity becomes unauthenticated; signed-in identity is passed to the trusted session boundary. Because the production profile and role repositories are intentionally unconfigured in this phase, a signed-in Firebase identity fails closed with access denied rather than receiving demo or inferred authorization.
 
 ## Roles
 
@@ -80,12 +82,13 @@ Fill in the six `NEXT_PUBLIC_FIREBASE_*` values for a non-production Firebase we
 
 Firebase validation rejects example placeholders and malformed project, domain, bucket, sender, and app identifiers. Browser initialization uses a named Firebase app and refuses to reuse it if its configuration differs.
 
-The authentication foundation does not initialize Firebase during page rendering, write data, define business collections, or connect to production. Future Firebase authentication and profile implementations must remain behind the service contracts and resolve trusted authorization data outside client-controlled state.
+Firebase Auth initializes only in the browser when the production authentication boundary subscribes or performs an operation. This phase does not initialize Firestore, write data, define business collections, or add Admin credentials. Future profile and role implementations must remain behind trusted service boundaries and resolve authorization data outside client-controlled state.
 
 ## Intentionally deferred
 
-- Production authentication-provider and trusted profile/role repository adapters
-- Secure server session transport and sign-in/sign-out implementation
+- Trusted production profile, role-assignment, tenant, and subscription repository adapters
+- Server-verified session transport for protected APIs and routes
+- Password reset, registration, multi-factor authentication, and account recovery
 - Facility selection and switching UI
 - Production Firebase configuration or deployment
 - Stock, controlled-medicine, and business collection workflows

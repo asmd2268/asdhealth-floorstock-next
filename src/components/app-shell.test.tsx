@@ -198,4 +198,18 @@ describe("application shell boundaries", () => {
       "#zebra-labels",
     );
   });
+
+  it("invokes sign-out and renders a safe localized failure", async () => {
+    const user = userEvent.setup();
+    const signOut = vi
+      .fn()
+      .mockResolvedValue({ ok: false, reason: "provider_unavailable" });
+    render(<AppShell {...defaultProps} signOut={signOut} />);
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-out failed. Please try again.",
+    );
+  });
 });

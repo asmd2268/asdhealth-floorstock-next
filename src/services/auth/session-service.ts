@@ -5,6 +5,7 @@ import {
 import type { SessionResolutionResult } from "@/domain/auth/types";
 import type {
   AuthenticationProvider,
+  IdentitySessionResolutionService,
   RoleAssignmentRepository,
   SessionResolutionService,
   TenantDirectoryRepository,
@@ -18,23 +19,17 @@ export interface SessionServiceDependencies {
   tenantDirectories: TenantDirectoryRepository;
 }
 
-export function createSessionResolutionService(
-  dependencies: SessionServiceDependencies,
-): SessionResolutionService {
-  return {
-    async resolve(): Promise<SessionResolutionResult> {
-      try {
-        const identity =
-          await dependencies.authenticationProvider.getIdentity();
-        if (!identity) {
-          return resolveSession({
-            identity: null,
-            profile: null,
-            roleAssignments: [],
-            tenantDirectory: null,
-          });
-        }
+type TrustedSessionDependencies = Omit<
+  SessionServiceDependencies,
+  "authenticationProvider"
+>;
 
+export function createIdentitySessionResolutionService(
+  dependencies: TrustedSessionDependencies,
+): IdentitySessionResolutionService {
+  return {
+    async resolveIdentity(identity): Promise<SessionResolutionResult> {
+      try {
         const profile = await dependencies.userProfiles.getByUid(identity.uid);
         if (!profile) {
           return resolveSession({
@@ -58,6 +53,37 @@ export function createSessionResolutionService(
           roleAssignments: assignments,
           tenantDirectory,
         });
+      } catch {
+        return { ok: false, failure: providerFailure() };
+      }
+    },
+  };
+}
+
+export function createSessionResolutionService(
+  dependencies: SessionServiceDependencies,
+): SessionResolutionService {
+  const identitySessions = createIdentitySessionResolutionService(dependencies);
+
+  return {
+    async resolve(): Promise<SessionResolutionResult> {
+      try {
+        const identityResult =
+          await dependencies.authenticationProvider.getIdentity();
+        if (!identityResult.ok) {
+          return { ok: false, failure: providerFailure() };
+        }
+        const identity = identityResult.identity;
+        if (!identity) {
+          return resolveSession({
+            identity: null,
+            profile: null,
+            roleAssignments: [],
+            tenantDirectory: null,
+          });
+        }
+
+        return identitySessions.resolveIdentity(identity);
       } catch {
         return { ok: false, failure: providerFailure() };
       }
