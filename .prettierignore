@@ -1,0 +1,6 @@
+.next/
+coverage/
+node_modules/
+legacy/reference/
+AGENTS.md
+CLAUDE.md
