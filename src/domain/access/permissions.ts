@@ -7,6 +7,7 @@ import type {
   PermissionRequest,
   ResourceId,
   RoleId,
+  ScopedPermissionRequest,
 } from "./types";
 
 type RoleDefaults = Readonly<
@@ -85,7 +86,7 @@ export function isScopeWithin(subject: UserScope, target: UserScope): boolean {
 
 function overrideMatches(
   override: PermissionOverride,
-  request: PermissionRequest,
+  request: Pick<PermissionRequest, "resource" | "action" | "targetScope">,
 ): boolean {
   return (
     override.resource === request.resource &&
@@ -96,6 +97,19 @@ function overrideMatches(
 
 export function resolvePermission(
   request: PermissionRequest,
+): PermissionDecision {
+  return resolvePermissionForRoles({
+    ...request,
+    roles: [request.role],
+  });
+}
+
+interface MultiRolePermissionRequest extends Omit<PermissionRequest, "role"> {
+  roles: readonly RoleId[];
+}
+
+function resolvePermissionForRoles(
+  request: MultiRolePermissionRequest,
 ): PermissionDecision {
   if (!isScopeWithin(request.subjectScope, request.targetScope)) {
     return { allowed: false, reason: "scope_mismatch" };
@@ -118,12 +132,27 @@ export function resolvePermission(
     return { allowed: true, reason: "explicit_allow" };
   }
 
-  const actions = roleDefaults[request.role]?.[request.resource];
-  if (actions?.includes(request.action)) {
+  if (
+    request.roles.some((role) =>
+      roleDefaults[role]?.[request.resource]?.includes(request.action),
+    )
+  ) {
     return { allowed: true, reason: "role_default" };
   }
 
   return { allowed: false, reason: "default_deny" };
+}
+
+export function resolveScopedPermission(
+  request: ScopedPermissionRequest,
+): PermissionDecision {
+  const roles = request.roleAssignments
+    .filter((assignment) =>
+      isScopeWithin(assignment.scope, request.targetScope),
+    )
+    .map((assignment) => assignment.role);
+
+  return resolvePermissionForRoles({ ...request, roles });
 }
 
 export function can(request: PermissionRequest): boolean {

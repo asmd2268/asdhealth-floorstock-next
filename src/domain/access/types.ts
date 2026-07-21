@@ -13,6 +13,10 @@ export const roleIds = [
 
 export type RoleId = (typeof roleIds)[number];
 
+export function isRoleId(value: string): value is RoleId {
+  return (roleIds as readonly string[]).includes(value);
+}
+
 export const permissionActions = [
   "read",
   "create",
@@ -22,6 +26,10 @@ export const permissionActions = [
 ] as const;
 
 export type PermissionAction = (typeof permissionActions)[number];
+
+export function isPermissionAction(value: string): value is PermissionAction {
+  return (permissionActions as readonly string[]).includes(value);
+}
 
 export const resourceIds = [
   "dashboard",
@@ -33,6 +41,10 @@ export const resourceIds = [
 
 export type ResourceId = (typeof resourceIds)[number];
 
+export function isResourceId(value: string): value is ResourceId {
+  return (resourceIds as readonly string[]).includes(value);
+}
+
 export type PermissionEffect = "allow" | "deny";
 
 export interface PermissionOverride {
@@ -40,6 +52,18 @@ export interface PermissionOverride {
   resource: ResourceId;
   action: PermissionAction;
   scope?: UserScope;
+}
+
+export interface ScopedRoleAssignment {
+  role: RoleId;
+  scope: UserScope;
+}
+
+export interface ScopedPermissionRequest extends Omit<
+  PermissionRequest,
+  "role"
+> {
+  roleAssignments: readonly ScopedRoleAssignment[];
 }
 
 export interface PermissionRequest {

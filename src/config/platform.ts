@@ -7,7 +7,6 @@ import type {
   SubscriptionPlan,
   UserScope,
 } from "@/domain/platform/types";
-import type { AuthenticatedUser } from "@/services/contracts/auth";
 
 export const baseBrand: BrandingConfiguration = {
   productName: "ASDHealth Floor Stock",
@@ -46,24 +45,16 @@ export const demoFacility: Facility = {
   regionCode: "SA-01",
 };
 
-export const demoFacilityScope: UserScope = {
+export const demoFacilityScope = {
   kind: "facility",
   platformId: demoPlatform.id,
   organizationId: demoOrganization.id,
   facilityId: demoFacility.id,
-};
+} as const satisfies UserScope;
 
 export const demoFeatureFlags: FeatureFlagSet = Object.fromEntries(
   baseBrand.enabledFeatures.map((feature) => [feature, true]),
 );
-
-export const demoAuthenticatedUser: AuthenticatedUser = {
-  id: "demo-pharmacy-manager",
-  email: null,
-  displayName: null,
-  role: "pharmacy_manager",
-  scope: demoFacilityScope,
-};
 
 export function getSafeLogoUrl(logoUrl?: string): string | undefined {
   if (!logoUrl) return undefined;

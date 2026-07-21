@@ -11,10 +11,10 @@ import {
 
 import { getSafeLogoUrl } from "@/config/platform";
 import { roleIds, type RoleId } from "@/domain/access/types";
+import type { AuthenticatedUser } from "@/domain/auth/types";
 import type {
   BrandingConfiguration,
   FeatureFlagSet,
-  UserScope,
 } from "@/domain/platform/types";
 import { getDictionary, getDirection, type Locale } from "@/i18n/dictionaries";
 import { serializeLocaleCookie } from "@/i18n/locale";
@@ -23,7 +23,6 @@ import {
   type NavigationItem,
   type NavigationItemId,
 } from "@/navigation/navigation";
-import type { AuthenticatedUser } from "@/services/contracts/auth";
 
 import {
   ArrowIcon,
@@ -101,7 +100,6 @@ export interface AppShellProps {
   enableDemoRoleSwitcher: boolean;
   featureFlags: FeatureFlagSet;
   initialLocale: Locale;
-  targetScope: UserScope;
 }
 
 export function AppShell({
@@ -110,16 +108,29 @@ export function AppShell({
   enableDemoRoleSwitcher,
   featureFlags,
   initialLocale,
-  targetScope,
 }: AppShellProps) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
-  const [demoRole, setDemoRole] = useState<RoleId>(authenticatedUser.role);
+  const [demoRole, setDemoRole] = useState<RoleId>(
+    authenticatedUser.roleAssignments.at(0)?.role ??
+      "external_pharmacy_supervisor",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const wasSidebarOpen = useRef(false);
   const isMobile = useMobileViewport();
-  const role = enableDemoRoleSwitcher ? demoRole : authenticatedUser.role;
+  const roleAssignments = useMemo(
+    () =>
+      enableDemoRoleSwitcher
+        ? [{ role: demoRole, scope: authenticatedUser.activeScope }]
+        : authenticatedUser.roleAssignments,
+    [
+      authenticatedUser.activeScope,
+      authenticatedUser.roleAssignments,
+      demoRole,
+      enableDemoRoleSwitcher,
+    ],
+  );
   const dictionary = getDictionary(locale);
   const direction = getDirection(locale);
   const drawerHidden = isMobile && !sidebarOpen;
@@ -156,12 +167,18 @@ export function AppShell({
   const navigation = useMemo(
     () =>
       getVisibleNavigation({
-        role,
-        subjectScope: authenticatedUser.scope,
-        targetScope,
+        roleAssignments,
+        subjectScope: authenticatedUser.activeScope,
+        targetScope: authenticatedUser.activeScope,
         featureFlags,
+        overrides: authenticatedUser.explicitPermissionOverrides,
       }),
-    [authenticatedUser.scope, featureFlags, role, targetScope],
+    [
+      authenticatedUser.activeScope,
+      authenticatedUser.explicitPermissionOverrides,
+      featureFlags,
+      roleAssignments,
+    ],
   );
   const modules = navigation.filter(isModuleItem);
   const shellStyle = {
@@ -223,8 +240,8 @@ export function AppShell({
         <div className="facility-chip">
           <BuildingIcon />
           <span>
-            <small>{dictionary.shell.demoMode}</small>
-            <strong>{dictionary.shell.hospitalContext}</strong>
+            <small>{dictionary.shell.facilityContext}</small>
+            <strong>{authenticatedUser.activeFacilityId}</strong>
           </span>
         </div>
 
@@ -267,7 +284,11 @@ export function AppShell({
 
           <div className="topbar-context">
             <span className="status-dot" />
-            <span>{dictionary.shell.demoMode}</span>
+            <span>
+              {enableDemoRoleSwitcher
+                ? dictionary.shell.demoMode
+                : dictionary.shell.authenticatedSession}
+            </span>
           </div>
 
           <div className="topbar-controls">

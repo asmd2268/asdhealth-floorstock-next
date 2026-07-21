@@ -13,9 +13,26 @@ export interface Dictionary {
     language: string;
     role: string;
     demoMode: string;
-    hospitalContext: string;
+    authenticatedSession: string;
+    facilityContext: string;
   };
   languages: Record<Locale, string>;
+  auth: {
+    loadingTitle: string;
+    loadingDescription: string;
+    signedOutTitle: string;
+    signedOutDescription: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    signIn: string;
+    signInUnavailable: string;
+    accessDeniedTitle: string;
+    accessDeniedDescription: string;
+    errorTitle: string;
+    errorDescription: string;
+  };
   dashboard: {
     eyebrow: string;
     title: string;
@@ -62,9 +79,28 @@ const en: Dictionary = {
     language: "Language",
     role: "Demo role",
     demoMode: "Foundation demo",
-    hospitalContext: "Central Hospital",
+    authenticatedSession: "Authenticated session",
+    facilityContext: "Active facility",
   },
   languages: { en: "English", ar: "Arabic" },
+  auth: {
+    loadingTitle: "Preparing your secure workspace",
+    loadingDescription: "Your identity and access scope are being verified.",
+    signedOutTitle: "Sign in to continue",
+    signedOutDescription: "Use your organization account to continue.",
+    emailLabel: "Email address",
+    emailPlaceholder: "name@organization.com",
+    passwordLabel: "Password",
+    passwordPlaceholder: "Enter your password",
+    signIn: "Sign in",
+    signInUnavailable: "Authentication connection is not enabled yet.",
+    accessDeniedTitle: "Access denied",
+    accessDeniedDescription:
+      "Your account does not have a valid tenant, facility, or role assignment.",
+    errorTitle: "Authentication unavailable",
+    errorDescription:
+      "The authentication service could not be reached. Please try again later.",
+  },
   dashboard: {
     eyebrow: "Platform foundation",
     title: "Welcome to your floor stock workspace",
@@ -129,9 +165,28 @@ const ar: Dictionary = {
     language: "اللغة",
     role: "الدور التجريبي",
     demoMode: "نسخة تأسيسية تجريبية",
-    hospitalContext: "المستشفى المركزي",
+    authenticatedSession: "جلسة موثقة",
+    facilityContext: "المنشأة النشطة",
   },
   languages: { en: "الإنجليزية", ar: "العربية" },
+  auth: {
+    loadingTitle: "جارٍ تجهيز مساحة العمل الآمنة",
+    loadingDescription: "يتم التحقق من هويتك ونطاق صلاحياتك.",
+    signedOutTitle: "سجّل الدخول للمتابعة",
+    signedOutDescription: "استخدم حساب منشأتك للمتابعة.",
+    emailLabel: "البريد الإلكتروني",
+    emailPlaceholder: "name@organization.com",
+    passwordLabel: "كلمة المرور",
+    passwordPlaceholder: "أدخل كلمة المرور",
+    signIn: "تسجيل الدخول",
+    signInUnavailable: "ربط خدمة المصادقة غير مفعّل حاليًا.",
+    accessDeniedTitle: "تم رفض الوصول",
+    accessDeniedDescription:
+      "لا يملك حسابك ارتباطًا صالحًا بالمستأجر أو المنشأة أو الدور.",
+    errorTitle: "خدمة المصادقة غير متاحة",
+    errorDescription:
+      "تعذر الوصول إلى خدمة المصادقة. يرجى المحاولة مرة أخرى لاحقًا.",
+  },
   dashboard: {
     eyebrow: "أساس المنصة",
     title: "مرحبًا بك في مساحة عمل مخزون الأقسام",
