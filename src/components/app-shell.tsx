@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-
 import {
-  baseBrand,
-  demoFacilityScope,
-  demoFeatureFlags,
-} from "@/config/platform";
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
+
+import { getSafeLogoUrl } from "@/config/platform";
 import { roleIds, type RoleId } from "@/domain/access/types";
+import type {
+  BrandingConfiguration,
+  FeatureFlagSet,
+  UserScope,
+} from "@/domain/platform/types";
 import { getDictionary, getDirection, type Locale } from "@/i18n/dictionaries";
+import { serializeLocaleCookie } from "@/i18n/locale";
 import {
   getVisibleNavigation,
   type NavigationItem,
   type NavigationItemId,
 } from "@/navigation/navigation";
+import type { AuthenticatedUser } from "@/services/contracts/auth";
 
 import {
   ArrowIcon,
@@ -28,6 +38,9 @@ import {
   ShieldIcon,
   TagIcon,
 } from "./icons";
+
+const SIDEBAR_ID = "application-sidebar";
+const MOBILE_MEDIA_QUERY = "(max-width: 820px)";
 
 const navigationIcons: Record<NavigationItemId, typeof GridIcon> = {
   dashboard: GridIcon,
@@ -52,41 +65,116 @@ const moduleDescriptions = {
   controlled_medicines: "controlledMedicinesDescription",
 } as const;
 
-type FeatureNavigationItem = NavigationItem & {
-  feature: NonNullable<NavigationItem["feature"]>;
+type ModuleNavigationItem = NavigationItem & {
+  id: Exclude<NavigationItemId, "dashboard">;
 };
 
-function isFeatureItem(item: NavigationItem): item is FeatureNavigationItem {
-  return item.feature !== undefined;
+function isModuleItem(item: NavigationItem): item is ModuleNavigationItem {
+  return item.id !== "dashboard";
 }
 
-export function AppShell() {
-  const [locale, setLocale] = useState<Locale>("en");
-  const [role, setRole] = useState<RoleId>("pharmacy_manager");
+function subscribeToMobileViewport(callback: () => void): () => void {
+  const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+  mediaQuery.addEventListener("change", callback);
+  return () => mediaQuery.removeEventListener("change", callback);
+}
+
+function getMobileViewportSnapshot(): boolean {
+  return window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+}
+
+function getServerMobileViewportSnapshot(): boolean {
+  return false;
+}
+
+function useMobileViewport(): boolean {
+  return useSyncExternalStore(
+    subscribeToMobileViewport,
+    getMobileViewportSnapshot,
+    getServerMobileViewportSnapshot,
+  );
+}
+
+export interface AppShellProps {
+  authenticatedUser: AuthenticatedUser;
+  branding: BrandingConfiguration;
+  enableDemoRoleSwitcher: boolean;
+  featureFlags: FeatureFlagSet;
+  initialLocale: Locale;
+  targetScope: UserScope;
+}
+
+export function AppShell({
+  authenticatedUser,
+  branding,
+  enableDemoRoleSwitcher,
+  featureFlags,
+  initialLocale,
+  targetScope,
+}: AppShellProps) {
+  const [locale, setLocale] = useState<Locale>(initialLocale);
+  const [demoRole, setDemoRole] = useState<RoleId>(authenticatedUser.role);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const wasSidebarOpen = useRef(false);
+  const isMobile = useMobileViewport();
+  const role = enableDemoRoleSwitcher ? demoRole : authenticatedUser.role;
   const dictionary = getDictionary(locale);
   const direction = getDirection(locale);
+  const drawerHidden = isMobile && !sidebarOpen;
+  const safeLogoUrl = getSafeLogoUrl(branding.logoUrl);
 
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = direction;
-    window.localStorage.setItem("asdhealth-locale", locale);
   }, [direction, locale]);
+
+  useEffect(() => {
+    if (!isMobile || !sidebarOpen) {
+      if (wasSidebarOpen.current) menuButtonRef.current?.focus();
+      wasSidebarOpen.current = false;
+      return;
+    }
+
+    wasSidebarOpen.current = true;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMobile, sidebarOpen]);
 
   const navigation = useMemo(
     () =>
       getVisibleNavigation({
         role,
-        subjectScope: demoFacilityScope,
-        targetScope: demoFacilityScope,
-        featureFlags: demoFeatureFlags,
+        subjectScope: authenticatedUser.scope,
+        targetScope,
+        featureFlags,
       }),
-    [role],
+    [authenticatedUser.scope, featureFlags, role, targetScope],
   );
-  const modules = navigation.filter(isFeatureItem);
+  const modules = navigation.filter(isModuleItem);
   const shellStyle = {
-    "--accent": baseBrand.primaryAccentToken,
+    "--accent": branding.primaryAccentToken,
   } as CSSProperties;
+
+  const changeLocale = (nextLocale: Locale) => {
+    setLocale(nextLocale);
+    document.cookie = serializeLocaleCookie(
+      nextLocale,
+      window.location.protocol === "https:",
+    );
+  };
 
   return (
     <div className="app-shell" dir={direction} style={shellStyle}>
@@ -97,20 +185,36 @@ export function AppShell() {
         onClick={() => setSidebarOpen(false)}
       />
 
-      <aside className={`sidebar ${sidebarOpen ? "is-open" : ""}`}>
+      <aside
+        aria-hidden={drawerHidden}
+        className={`sidebar ${sidebarOpen ? "is-open" : ""}`}
+        id={SIDEBAR_ID}
+        inert={drawerHidden ? true : undefined}
+      >
         <div className="brand-lockup">
           <span className="brand-mark">
-            <HeartPulseIcon width={26} height={26} />
+            {safeLogoUrl ? (
+              // Dynamic white-label hosts cannot be enumerated in Next Image config.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={branding.productName}
+                className="brand-logo-image"
+                src={safeLogoUrl}
+              />
+            ) : (
+              <HeartPulseIcon width={26} height={26} />
+            )}
           </span>
           <span>
-            <strong>{dictionary.brand.productName}</strong>
-            <small>{dictionary.brand.clientDisplayName}</small>
+            <strong>{branding.productName}</strong>
+            <small>{branding.clientDisplayName}</small>
           </span>
           <button
             className="icon-button sidebar-close"
             type="button"
             aria-label={dictionary.shell.closeNavigation}
             onClick={() => setSidebarOpen(false)}
+            ref={closeButtonRef}
           >
             <CloseIcon />
           </button>
@@ -144,16 +248,19 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="sidebar-footer">{dictionary.brand.ownerText}</div>
+        <div className="sidebar-footer">{branding.ownerText}</div>
       </aside>
 
       <div className="workspace">
         <header className="topbar">
           <button
+            aria-controls={SIDEBAR_ID}
+            aria-expanded={sidebarOpen}
             className="icon-button menu-button"
             type="button"
             aria-label={dictionary.shell.openNavigation}
             onClick={() => setSidebarOpen(true)}
+            ref={menuButtonRef}
           >
             <MenuIcon />
           </button>
@@ -164,26 +271,32 @@ export function AppShell() {
           </div>
 
           <div className="topbar-controls">
-            <label className="control-field">
-              <span>{dictionary.shell.role}</span>
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value as RoleId)}
-              >
-                {roleIds.map((roleId) => (
-                  <option key={roleId} value={roleId}>
-                    {dictionary.roles[roleId]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {enableDemoRoleSwitcher ? (
+              <label className="control-field">
+                <span>{dictionary.shell.role}</span>
+                <select
+                  value={demoRole}
+                  onChange={(event) =>
+                    setDemoRole(event.target.value as RoleId)
+                  }
+                >
+                  {roleIds.map((roleId) => (
+                    <option key={roleId} value={roleId}>
+                      {dictionary.roles[roleId]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="control-field language-field">
               <span>{dictionary.shell.language}</span>
               <span className="select-with-icon">
                 <GlobeIcon width={17} height={17} />
                 <select
                   value={locale}
-                  onChange={(event) => setLocale(event.target.value as Locale)}
+                  onChange={(event) =>
+                    changeLocale(event.target.value as Locale)
+                  }
                 >
                   <option value="en">{dictionary.languages.en}</option>
                   <option value="ar">{dictionary.languages.ar}</option>
@@ -226,7 +339,7 @@ export function AppShell() {
                   return (
                     <article
                       className="module-card"
-                      id={item.feature}
+                      id={item.targetId}
                       key={item.id}
                     >
                       <span className="module-icon">
@@ -235,9 +348,7 @@ export function AppShell() {
                       <h3>
                         {dictionary.navigation[navigationLabels[item.id]]}
                       </h3>
-                      <p>
-                        {dictionary.modules[moduleDescriptions[item.feature]]}
-                      </p>
+                      <p>{dictionary.modules[moduleDescriptions[item.id]]}</p>
                       <a href={item.href}>
                         {dictionary.dashboard.openModule}
                         <ArrowIcon
@@ -287,9 +398,7 @@ export function AppShell() {
           </section>
         </main>
 
-        <footer className="workspace-footer">
-          {dictionary.brand.ownerText}
-        </footer>
+        <footer className="workspace-footer">{branding.ownerText}</footer>
       </div>
     </div>
   );

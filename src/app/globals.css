@@ -97,6 +97,12 @@ html[dir="rtl"] .sidebar {
   box-shadow: 0 8px 20px rgb(2 27 33 / 26%);
 }
 
+.brand-logo-image {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
 .brand-lockup > span:nth-child(2) {
   display: grid;
   min-width: 0;

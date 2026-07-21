@@ -18,12 +18,21 @@ type RoleDefaults = Readonly<
   >
 >;
 
-const featureResources: Readonly<Record<FeatureId, ResourceId>> = {
+export const featureResources: Readonly<Record<FeatureId, ResourceId>> = {
   announcements: "announcements",
   zebra_labels: "zebra_labels",
   new_request: "new_request",
   controlled_medicines: "controlled_medicines",
 };
+
+export const resourceFeatures: Readonly<Record<ResourceId, FeatureId | null>> =
+  {
+    dashboard: null,
+    announcements: "announcements",
+    zebra_labels: "zebra_labels",
+    new_request: "new_request",
+    controlled_medicines: "controlled_medicines",
+  };
 
 const sharedPharmacyRoles = [
   "master",
@@ -33,17 +42,28 @@ const sharedPharmacyRoles = [
   "controlled_drugs_officer",
 ] as const satisfies readonly RoleId[];
 
+const dashboardRoles = [
+  ...sharedPharmacyRoles,
+  "warehouse_manager",
+  "department_user",
+] as const satisfies readonly RoleId[];
+
 export const roleDefaults: RoleDefaults = Object.freeze({
+  ...Object.fromEntries(
+    dashboardRoles.map((role) => [role, { dashboard: ["read"] }]),
+  ),
   ...Object.fromEntries(
     sharedPharmacyRoles.map((role) => [
       role,
       {
+        dashboard: ["read"],
         announcements: ["read"],
         zebra_labels: ["read"],
       },
     ]),
   ),
   department_user: {
+    dashboard: ["read"],
     new_request: ["read", "create"],
   },
 });
@@ -70,7 +90,6 @@ function overrideMatches(
   return (
     override.resource === request.resource &&
     override.action === request.action &&
-    (!override.feature || override.feature === request.feature) &&
     (!override.scope || isScopeWithin(override.scope, request.targetScope))
   );
 }
@@ -82,7 +101,8 @@ export function resolvePermission(
     return { allowed: false, reason: "scope_mismatch" };
   }
 
-  if (request.feature && request.featureFlags?.[request.feature] !== true) {
+  const feature = resourceFeatures[request.resource];
+  if (feature && request.featureFlags?.[feature] !== true) {
     return { allowed: false, reason: "feature_disabled" };
   }
 
@@ -112,7 +132,7 @@ export function can(request: PermissionRequest): boolean {
 
 export interface FeatureAccessRequest extends Omit<
   PermissionRequest,
-  "resource" | "action" | "feature"
+  "resource" | "action"
 > {
   feature: FeatureId;
 }
@@ -122,6 +142,5 @@ export function canAccessFeature(request: FeatureAccessRequest): boolean {
     ...request,
     resource: featureResources[request.feature],
     action: "read",
-    feature: request.feature,
   });
 }

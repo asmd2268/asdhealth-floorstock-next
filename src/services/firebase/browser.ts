@@ -1,8 +1,32 @@
-import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import {
+  getApps,
+  initializeApp,
+  type FirebaseApp,
+  type FirebaseOptions,
+} from "firebase/app";
 
-import { readFirebaseEnvironment } from "./environment";
+import {
+  readFirebaseEnvironment,
+  type FirebaseEnvironment,
+} from "./environment";
+
+export const FIREBASE_BROWSER_APP_NAME = "asdhealth-floorstock-browser";
 
 let browserApp: FirebaseApp | undefined;
+
+export function firebaseOptionsMatch(
+  options: FirebaseOptions,
+  expected: FirebaseEnvironment,
+): boolean {
+  return (
+    options.apiKey === expected.apiKey &&
+    options.authDomain === expected.authDomain &&
+    options.projectId === expected.projectId &&
+    options.storageBucket === expected.storageBucket &&
+    options.messagingSenderId === expected.messagingSenderId &&
+    options.appId === expected.appId
+  );
+}
 
 export function getBrowserFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
@@ -12,7 +36,23 @@ export function getBrowserFirebaseApp(): FirebaseApp {
   }
 
   if (browserApp) return browserApp;
-  browserApp =
-    getApps().length > 0 ? getApp() : initializeApp(readFirebaseEnvironment());
+
+  const configuration = readFirebaseEnvironment();
+  const existingApp = getApps().find(
+    (app) => app.name === FIREBASE_BROWSER_APP_NAME,
+  );
+
+  if (existingApp) {
+    if (!firebaseOptionsMatch(existingApp.options, configuration)) {
+      throw new Error(
+        "The named Firebase browser app has different configuration.",
+      );
+    }
+
+    browserApp = existingApp;
+    return browserApp;
+  }
+
+  browserApp = initializeApp(configuration, FIREBASE_BROWSER_APP_NAME);
   return browserApp;
 }

@@ -1,10 +1,11 @@
-import { canAccessFeature } from "@/domain/access/permissions";
-import type { PermissionOverride, RoleId } from "@/domain/access/types";
+import { can } from "@/domain/access/permissions";
 import type {
-  FeatureFlagSet,
-  FeatureId,
-  UserScope,
-} from "@/domain/platform/types";
+  PermissionAction,
+  PermissionOverride,
+  ResourceId,
+  RoleId,
+} from "@/domain/access/types";
+import type { FeatureFlagSet, UserScope } from "@/domain/platform/types";
 
 export const navigationItemIds = [
   "dashboard",
@@ -18,20 +19,27 @@ export type NavigationItemId = (typeof navigationItemIds)[number];
 
 export interface NavigationItem {
   id: NavigationItemId;
-  href: string;
-  feature?: FeatureId;
+  targetId: string;
+  href: `#${string}`;
+  resource: ResourceId;
+  action: PermissionAction;
+}
+
+function navigationItem(
+  id: NavigationItemId,
+  resource: ResourceId,
+  action: PermissionAction = "read",
+): NavigationItem {
+  const targetId = id.replaceAll("_", "-");
+  return { id, targetId, href: `#${targetId}`, resource, action };
 }
 
 export const navigationItems: readonly NavigationItem[] = [
-  { id: "dashboard", href: "#dashboard" },
-  { id: "announcements", href: "#announcements", feature: "announcements" },
-  { id: "zebra_labels", href: "#zebra-labels", feature: "zebra_labels" },
-  { id: "new_request", href: "#new-request", feature: "new_request" },
-  {
-    id: "controlled_medicines",
-    href: "#controlled-medicines",
-    feature: "controlled_medicines",
-  },
+  navigationItem("dashboard", "dashboard"),
+  navigationItem("announcements", "announcements"),
+  navigationItem("zebra_labels", "zebra_labels"),
+  navigationItem("new_request", "new_request"),
+  navigationItem("controlled_medicines", "controlled_medicines"),
 ];
 
 export interface NavigationContext {
@@ -45,16 +53,15 @@ export interface NavigationContext {
 export function getVisibleNavigation(
   context: NavigationContext,
 ): readonly NavigationItem[] {
-  return navigationItems.filter(
-    (item) =>
-      !item.feature ||
-      canAccessFeature({
-        role: context.role,
-        feature: item.feature,
-        subjectScope: context.subjectScope,
-        targetScope: context.targetScope,
-        featureFlags: context.featureFlags,
-        overrides: context.overrides,
-      }),
+  return navigationItems.filter((item) =>
+    can({
+      role: context.role,
+      resource: item.resource,
+      action: item.action,
+      subjectScope: context.subjectScope,
+      targetScope: context.targetScope,
+      featureFlags: context.featureFlags,
+      overrides: context.overrides,
+    }),
   );
 }

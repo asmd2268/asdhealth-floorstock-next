@@ -1,21 +1,27 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
-import { dictionaries } from "@/i18n/dictionaries";
+import { baseBrand } from "@/config/platform";
+import { getDictionary, getDirection } from "@/i18n/dictionaries";
+import { LOCALE_COOKIE_NAME, resolveLocale } from "@/i18n/locale";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: dictionaries.en.metadata.title,
-  description: dictionaries.en.metadata.description,
+  title: baseBrand.productName,
+  description: getDictionary("en").metadata.description,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const locale = resolveLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
+
   return (
-    <html lang="en" dir="ltr">
+    <html lang={locale} dir={getDirection(locale)}>
       <body>{children}</body>
     </html>
   );

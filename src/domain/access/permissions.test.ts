@@ -10,13 +10,23 @@ const facilityScope = {
   facilityId: "facility-1",
 } as const;
 
+const organizationScope = {
+  kind: "organization",
+  platformId: "platform-1",
+  organizationId: "organization-1",
+} as const;
+
+const platformScope = {
+  kind: "platform",
+  platformId: "platform-1",
+} as const;
+
 const baseRequest: PermissionRequest = {
   role: "pharmacy_manager",
   resource: "announcements",
   action: "read",
   subjectScope: facilityScope,
   targetScope: facilityScope,
-  feature: "announcements",
   featureFlags: { announcements: true },
 };
 
@@ -52,10 +62,23 @@ describe("permission resolution", () => {
           ...baseRequest,
           role,
           resource: "zebra_labels",
-          feature: "zebra_labels",
           featureFlags: { zebra_labels: true },
         }),
       ).toBe(true);
+    },
+  );
+
+  it.each(["warehouse_manager", "department_user"] as const)(
+    "denies Zebra labels for %s by default",
+    (role) => {
+      expect(
+        can({
+          ...baseRequest,
+          role,
+          resource: "zebra_labels",
+          featureFlags: { zebra_labels: true },
+        }),
+      ).toBe(false);
     },
   );
 
@@ -67,7 +90,6 @@ describe("permission resolution", () => {
           ...baseRequest,
           role,
           resource: "new_request",
-          feature: "new_request",
           featureFlags: { new_request: true },
         }),
       ).toBe(false);
@@ -82,14 +104,22 @@ describe("permission resolution", () => {
           role: "department_user",
           resource: "new_request",
           action,
-          feature: "new_request",
           featureFlags: { new_request: true },
         }),
       ).toBe(true);
     }
   });
 
-  it("gives external pharmacy supervisors no feature access by default", () => {
+  it("gives external pharmacy supervisors no access by default", () => {
+    expect(
+      can({
+        ...baseRequest,
+        role: "external_pharmacy_supervisor",
+        resource: "dashboard",
+        featureFlags: {},
+      }),
+    ).toBe(false);
+
     for (const feature of [
       "announcements",
       "zebra_labels",
@@ -107,6 +137,44 @@ describe("permission resolution", () => {
       ).toBe(false);
     }
   });
+
+  it("derives the feature and denies when its flag is disabled", () => {
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        featureFlags: { announcements: false },
+      }),
+    ).toEqual({ allowed: false, reason: "feature_disabled" });
+  });
+
+  it("denies feature-backed resources when feature flags are missing", () => {
+    expect(
+      resolvePermission({ ...baseRequest, featureFlags: undefined }),
+    ).toEqual({
+      allowed: false,
+      reason: "feature_disabled",
+    });
+  });
+
+  it.each([
+    ["announcements", "pharmacy_manager"],
+    ["zebra_labels", "pharmacy_manager"],
+    ["new_request", "department_user"],
+    ["controlled_medicines", "master"],
+  ] as const)(
+    "gates %s through its canonical feature flag",
+    (resource, role) => {
+      expect(
+        resolvePermission({
+          ...baseRequest,
+          resource,
+          role,
+          featureFlags: { [resource]: false },
+          overrides: [{ effect: "allow", resource, action: "read" }],
+        }),
+      ).toEqual({ allowed: false, reason: "feature_disabled" });
+    },
+  );
 
   it("supports an explicit allow over a missing role default", () => {
     expect(
@@ -145,16 +213,97 @@ describe("permission resolution", () => {
     ).toEqual({ allowed: false, reason: "feature_disabled" });
   });
 
-  it("does not let overrides bypass tenant or facility scope", () => {
+  it("allows a platform scope to reach facilities in its platform", () => {
+    expect(
+      can({
+        ...baseRequest,
+        subjectScope: platformScope,
+        targetScope: {
+          ...facilityScope,
+          organizationId: "organization-2",
+          facilityId: "facility-2",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("allows an organization scope to reach its facilities", () => {
+    expect(
+      can({
+        ...baseRequest,
+        subjectScope: organizationScope,
+      }),
+    ).toBe(true);
+  });
+
+  it("denies cross-platform access", () => {
     expect(
       resolvePermission({
         ...baseRequest,
-        targetScope: { ...facilityScope, facilityId: "facility-2" },
-        overrides: [
-          { effect: "allow", resource: "announcements", action: "read" },
-        ],
+        subjectScope: platformScope,
+        targetScope: { ...facilityScope, platformId: "platform-2" },
       }),
     ).toEqual({ allowed: false, reason: "scope_mismatch" });
+  });
+
+  it("denies facility-to-organization escalation", () => {
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        targetScope: organizationScope,
+      }),
+    ).toEqual({ allowed: false, reason: "scope_mismatch" });
+  });
+
+  it("applies explicit allows only within their configured scope", () => {
+    const override = {
+      effect: "allow",
+      resource: "announcements",
+      action: "read",
+      scope: facilityScope,
+    } as const;
+
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        role: "warehouse_manager",
+        subjectScope: organizationScope,
+        overrides: [override],
+      }).reason,
+    ).toBe("explicit_allow");
+
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        role: "warehouse_manager",
+        subjectScope: organizationScope,
+        targetScope: { ...facilityScope, facilityId: "facility-2" },
+        overrides: [override],
+      }).reason,
+    ).toBe("default_deny");
+  });
+
+  it("applies scoped denies before scoped allows", () => {
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        subjectScope: organizationScope,
+        overrides: [
+          {
+            effect: "allow",
+            resource: "announcements",
+            action: "read",
+            scope: facilityScope,
+          },
+          {
+            effect: "deny",
+            resource: "announcements",
+            action: "read",
+            scope: facilityScope,
+          },
+        ],
+      }),
+    ).toEqual({ allowed: false, reason: "explicit_deny" });
   });
 
   it("denies unconfigured actions and controlled medicine access", () => {

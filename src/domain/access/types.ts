@@ -1,8 +1,4 @@
-import type {
-  FeatureFlagSet,
-  FeatureId,
-  UserScope,
-} from "@/domain/platform/types";
+import type { FeatureFlagSet, UserScope } from "@/domain/platform/types";
 
 export const roleIds = [
   "master",
@@ -28,6 +24,7 @@ export const permissionActions = [
 export type PermissionAction = (typeof permissionActions)[number];
 
 export const resourceIds = [
+  "dashboard",
   "announcements",
   "zebra_labels",
   "new_request",
@@ -43,7 +40,6 @@ export interface PermissionOverride {
   resource: ResourceId;
   action: PermissionAction;
   scope?: UserScope;
-  feature?: FeatureId;
 }
 
 export interface PermissionRequest {
@@ -52,7 +48,6 @@ export interface PermissionRequest {
   action: PermissionAction;
   subjectScope: UserScope;
   targetScope: UserScope;
-  feature?: FeatureId;
   featureFlags?: FeatureFlagSet;
   overrides?: readonly PermissionOverride[];
 }

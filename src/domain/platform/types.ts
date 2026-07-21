@@ -42,7 +42,7 @@ export type UserScope =
 export interface SubscriptionPlan {
   id: string;
   displayName: string;
-  enabledFeatures: ReadonlySet<FeatureId>;
+  enabledFeatures: readonly FeatureId[];
 }
 
 export interface FeatureFlag {
@@ -60,5 +60,5 @@ export interface BrandingConfiguration {
   logoUrl?: string;
   primaryAccentToken: string;
   domain: string;
-  enabledFeatures: ReadonlySet<FeatureId>;
+  enabledFeatures: readonly FeatureId[];
 }

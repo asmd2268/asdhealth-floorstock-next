@@ -2,9 +2,8 @@ node_modules/
 .next/
 out/
 
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 
 .firebase/
 firebase-debug.log

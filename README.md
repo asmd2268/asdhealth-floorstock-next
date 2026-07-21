@@ -12,7 +12,7 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/domain/platform` contains typed platform, organization, facility, user-scope, subscription, feature-flag, and branding models.
 - `src/domain/access` contains role/resource/action identifiers and the pure central permission engine.
 - `src/i18n` contains the English and Arabic dictionaries, locale types, and direction mapping. UI components consume dictionary values rather than embedding user-facing strings.
-- `src/navigation` declares navigation once and filters it exclusively through the permission engine.
+- `src/navigation` declares permission metadata and canonical targets once, then resolves every navigation item through the permission engine.
 - `src/services/contracts` defines framework-independent auth and Firestore boundaries without business collections.
 - `src/services/firebase` validates public browser configuration with Zod and lazily initializes Firebase only when a browser caller requests it.
 
@@ -31,11 +31,11 @@ The canonical role identifiers are:
 - `department_user`
 - `external_pharmacy_supervisor`
 
-The role switcher in the application shell is for development/demo use only. It is not an authentication control.
+The role switcher is for development/demo use only. It is disabled by default and appears only when `NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER=true`. It is not an authentication control; without that explicit flag, the shell role and scope come from its authenticated-user boundary.
 
 ## Permission model
 
-Permission checks use the pure `resolvePermission`, `can`, and `canAccessFeature` functions. Every request includes a role, resource, action, subject scope, target scope, and—when relevant—feature state.
+Permission checks use the pure `resolvePermission`, `can`, and `canAccessFeature` functions. Every request includes a role, resource, action, subject scope, and target scope. The permission layer derives feature identity canonically from the resource, so callers cannot bypass feature gates by omitting feature metadata. Missing feature flags deny feature-backed resources.
 
 Resolution precedence is:
 
@@ -46,15 +46,15 @@ Resolution precedence is:
 5. Apply the role default.
 6. Deny by default.
 
-Announcements and Zebra labels default to the five confirmed pharmacy/master roles. New Request defaults only to `department_user`. Warehouse, department, and external-pharmacy roles do not inherit pharmacy features, and `external_pharmacy_supervisor` has no feature access by default.
+Announcements and Zebra labels default to the five confirmed pharmacy/master roles. New Request defaults only to `department_user`. Warehouse and department roles do not inherit pharmacy features, and `external_pharmacy_supervisor` has no navigation or feature access by default.
 
 Controlled medicines currently has typed feature and resource identifiers only. No transfer statuses, stock movement behavior, or final workflow is defined in Phase 1.
 
 ## Internationalization and branding
 
-English (`ltr`) and Arabic (`rtl`) are centralized in `src/i18n/dictionaries.ts`. The language switcher updates content, document language, direction, alignment, and Arabic typography together.
+English (`ltr`) and Arabic (`rtl`) are centralized in `src/i18n/dictionaries.ts`. The selected locale is restored from a same-site cookie during server rendering, so the initial document language and direction match without a hydration mismatch. The language switcher updates content, document language, direction, alignment, and Arabic typography together.
 
-The white-label model supports product name, client display name, logo URL, primary accent token, domain, and enabled features. The base brand remains ASDHealth Floor Stock with the persistent ownership line “By Ali Abudahash.”
+The white-label configuration is the source of truth for product name, client display name, safe logo URL, primary accent token, domain, ownership text, and enabled features. The base brand remains ASDHealth Floor Stock with the persistent ownership line “By Ali Abudahash.”
 
 ## Environment setup
 
@@ -65,6 +65,8 @@ cp .env.example .env.local
 ```
 
 Fill in the six `NEXT_PUBLIC_FIREBASE_*` values for a non-production Firebase web app when Firebase initialization is needed. These values are validated at the browser service boundary. Do not place service-account credentials, admin keys, or other secrets in `NEXT_PUBLIC_*` variables.
+
+Firebase validation rejects example placeholders and malformed project, domain, bucket, sender, and app identifiers. Browser initialization uses a named Firebase app and refuses to reuse it if its configuration differs.
 
 Phase 1 does not initialize Firebase during page rendering, write data, define business collections, or connect to production.
 

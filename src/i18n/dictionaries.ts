@@ -6,7 +6,6 @@ export type Direction = "ltr" | "rtl";
 
 export interface Dictionary {
   metadata: { title: string; description: string };
-  brand: { productName: string; ownerText: string; clientDisplayName: string };
   shell: {
     openNavigation: string;
     closeNavigation: string;
@@ -55,11 +54,6 @@ const en: Dictionary = {
   metadata: {
     title: "ASDHealth Floor Stock",
     description: "A secure, multilingual foundation for hospital floor stock.",
-  },
-  brand: {
-    productName: "ASDHealth Floor Stock",
-    ownerText: "By Ali Abudahash",
-    clientDisplayName: "ASDHealth",
   },
   shell: {
     openNavigation: "Open navigation",
@@ -127,11 +121,6 @@ const ar: Dictionary = {
   metadata: {
     title: "ASDHealth Floor Stock",
     description: "أساس آمن ومتعدد اللغات لمخزون أقسام المستشفى.",
-  },
-  brand: {
-    productName: "ASDHealth Floor Stock",
-    ownerText: "By Ali Abudahash",
-    clientDisplayName: "ASDHealth",
   },
   shell: {
     openNavigation: "فتح قائمة التنقل",
