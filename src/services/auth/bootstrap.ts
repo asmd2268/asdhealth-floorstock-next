@@ -2,6 +2,8 @@ import type {
   AuthenticationState,
   SessionResolutionResult,
 } from "@/domain/auth/types";
+import { failClosedFeatureFlags } from "@/config/platform";
+import type { FeatureFlagSet } from "@/domain/platform/types";
 import type { SessionResolutionService } from "@/services/contracts/auth";
 
 function toAuthenticationState(
@@ -14,13 +16,25 @@ function toAuthenticationState(
   return { status: "error", failure: result.failure };
 }
 
-export async function resolveInitialAuthenticationState(
+export interface ApplicationBootstrap {
+  authenticationState: AuthenticationState;
+  featureFlags: FeatureFlagSet;
+  demoEnabled: boolean;
+}
+
+export async function resolveApplicationBootstrap(
   demoEnabled: boolean,
   productionSessions: SessionResolutionService,
-  demoSessions: SessionResolutionService,
-): Promise<AuthenticationState> {
+  loadDemoSessions: () => Promise<SessionResolutionService>,
+): Promise<ApplicationBootstrap> {
   // The environment gate is resolved on the server. Production never attempts
   // to recover a missing session with demo identity or client-provided claims.
-  const service = demoEnabled ? demoSessions : productionSessions;
-  return toAuthenticationState(await service.resolve());
+  const service = demoEnabled ? await loadDemoSessions() : productionSessions;
+  const result = await service.resolve();
+
+  return {
+    authenticationState: toAuthenticationState(result),
+    featureFlags: result.ok ? result.featureFlags : failClosedFeatureFlags,
+    demoEnabled,
+  };
 }

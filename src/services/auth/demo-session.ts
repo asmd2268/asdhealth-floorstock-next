@@ -10,6 +10,7 @@ import {
   demoOrganization,
   demoPlatform,
 } from "@/config/platform";
+import { featureIds, type FeatureFlagSet } from "@/domain/platform/types";
 import type { SessionResolutionService } from "@/services/contracts/auth";
 
 const demoIdentity: ProviderIdentity = {
@@ -47,6 +48,12 @@ const demoTenantDirectory: TenantDirectory = {
   platformId: demoPlatform.id,
   organizations: [{ id: demoOrganization.id }],
   facilities: [{ id: demoFacility.id, organizationId: demoOrganization.id }],
+  featureFlags: Object.fromEntries(
+    featureIds.map((feature) => [
+      feature,
+      ["announcements", "zebra_labels", "new_request"].includes(feature),
+    ]),
+  ) as FeatureFlagSet,
 };
 
 export const explicitDemoSessionService: SessionResolutionService = {

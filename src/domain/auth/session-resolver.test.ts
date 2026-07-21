@@ -23,6 +23,12 @@ const directory = {
     { id: "facility-1", organizationId: "organization-1" },
     { id: "facility-2", organizationId: "organization-1" },
   ],
+  featureFlags: {
+    announcements: true,
+    zebra_labels: true,
+    new_request: true,
+    controlled_medicines: false,
+  },
 } as const;
 
 const profile: UserProfileRecord = {
@@ -102,6 +108,33 @@ describe("session resolver", () => {
         ),
       ),
     ).toBe("tenant_mismatch");
+  });
+
+  it("denies a session when trusted tenant feature flags are missing", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: { ...directory, featureFlags: undefined },
+          }),
+        ),
+      ),
+    ).toBe("feature_flags_missing");
+  });
+
+  it("denies a session when trusted tenant feature flags are incomplete", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: {
+              ...directory,
+              featureFlags: { announcements: true },
+            },
+          }),
+        ),
+      ),
+    ).toBe("feature_flags_missing");
   });
 
   it("denies an invalid active facility", () => {

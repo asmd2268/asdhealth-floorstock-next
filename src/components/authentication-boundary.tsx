@@ -17,7 +17,6 @@ import { GlobeIcon, HeartPulseIcon, ShieldIcon } from "./icons";
 export interface AuthenticationBoundaryProps {
   authenticationState: AuthenticationState;
   branding: BrandingConfiguration;
-  enableDemoRoleSwitcher: boolean;
   featureFlags: FeatureFlagSet;
   initialLocale: Locale;
 }
@@ -25,7 +24,6 @@ export interface AuthenticationBoundaryProps {
 export function AuthenticationBoundary({
   authenticationState,
   branding,
-  enableDemoRoleSwitcher,
   featureFlags,
   initialLocale,
 }: AuthenticationBoundaryProps) {
@@ -55,7 +53,6 @@ export function AuthenticationBoundary({
       <AppShell
         authenticatedUser={authenticationState.user}
         branding={branding}
-        enableDemoRoleSwitcher={enableDemoRoleSwitcher}
         featureFlags={featureFlags}
         initialLocale={locale}
       />

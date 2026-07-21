@@ -7,9 +7,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { baseBrand, demoFacilityScope } from "@/config/platform";
+import { resolveTrustedDemoGate } from "@/config/public-environment";
 import type { AuthenticatedUser } from "@/domain/auth/types";
 
-import { AppShell, type AppShellProps } from "./app-shell";
+import { AppShell, DemoAppShell, type AppShellProps } from "./app-shell";
 
 const authenticatedUser: AuthenticatedUser = {
   uid: "user-1",
@@ -29,7 +30,6 @@ const authenticatedUser: AuthenticatedUser = {
 const defaultProps: AppShellProps = {
   authenticatedUser,
   branding: baseBrand,
-  enableDemoRoleSwitcher: false,
   featureFlags: {
     announcements: true,
     zebra_labels: true,
@@ -75,8 +75,32 @@ describe("application shell boundaries", () => {
   });
 
   it("shows the demo role switcher only when explicitly enabled", () => {
-    render(<AppShell {...defaultProps} enableDemoRoleSwitcher />);
+    render(<DemoAppShell {...defaultProps} />);
     expect(screen.getByLabelText("Demo role")).toBeInTheDocument();
+  });
+
+  it("cannot enable role substitution through an untrusted AppShell prop", () => {
+    const untrustedProps = {
+      ...defaultProps,
+      enableDemoRoleSwitcher: true,
+    };
+    render(<AppShell {...untrustedProps} />);
+    expect(screen.queryByLabelText("Demo role")).not.toBeInTheDocument();
+    expect(screen.queryByText("Foundation demo")).not.toBeInTheDocument();
+  });
+
+  it("keeps production role switching disabled when the public flag is true", () => {
+    const trustedGate = resolveTrustedDemoGate("production", "true");
+    render(
+      trustedGate ? (
+        <DemoAppShell {...defaultProps} />
+      ) : (
+        <AppShell {...defaultProps} />
+      ),
+    );
+
+    expect(trustedGate).toBe(false);
+    expect(screen.queryByLabelText("Demo role")).not.toBeInTheDocument();
   });
 
   it("uses authenticated identity when demo switching is disabled", () => {

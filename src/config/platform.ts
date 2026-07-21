@@ -52,9 +52,12 @@ export const demoFacilityScope = {
   facilityId: demoFacility.id,
 } as const satisfies UserScope;
 
-export const demoFeatureFlags: FeatureFlagSet = Object.fromEntries(
-  baseBrand.enabledFeatures.map((feature) => [feature, true]),
-);
+export const failClosedFeatureFlags: FeatureFlagSet = {
+  announcements: false,
+  zebra_labels: false,
+  new_request: false,
+  controlled_medicines: false,
+};
 
 export function getSafeLogoUrl(logoUrl?: string): string | undefined {
   if (!logoUrl) return undefined;

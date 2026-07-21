@@ -6,7 +6,7 @@ import type {
   RoleId,
   ScopedRoleAssignment,
 } from "@/domain/access/types";
-import type { UserScope } from "@/domain/platform/types";
+import type { FeatureFlagSet, UserScope } from "@/domain/platform/types";
 
 export const accountStatuses = [
   "active",
@@ -71,6 +71,7 @@ export interface TenantDirectory {
   platformId: string;
   organizations: readonly TenantOrganizationRecord[];
   facilities: readonly TenantFacilityRecord[];
+  featureFlags?: FeatureFlagSet;
 }
 
 export interface AuthenticatedUser {
@@ -105,6 +106,7 @@ export type SessionFailureReason =
   | "unknown_role"
   | "role_scope_invalid"
   | "permission_override_invalid"
+  | "feature_flags_missing"
   | "provider_unavailable";
 
 export interface SessionFailure {
@@ -113,7 +115,7 @@ export interface SessionFailure {
 }
 
 export type SessionResolutionResult =
-  | { ok: true; user: AuthenticatedUser }
+  | { ok: true; user: AuthenticatedUser; featureFlags: FeatureFlagSet }
   | { ok: false; failure: SessionFailure };
 
 export type AuthenticationState =

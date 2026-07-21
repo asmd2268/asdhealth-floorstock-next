@@ -1,31 +1,50 @@
 import { cookies } from "next/headers";
 
+import { DemoAppShell } from "@/components/app-shell";
 import { AuthenticationBoundary } from "@/components/authentication-boundary";
-import { baseBrand, demoFeatureFlags } from "@/config/platform";
-import { isDemoRoleSwitcherEnabled } from "@/config/public-environment";
+import { baseBrand } from "@/config/platform";
+import { isTrustedDemoModeEnabled } from "@/config/public-environment";
 import { LOCALE_COOKIE_NAME, resolveLocale } from "@/i18n/locale";
-import { resolveInitialAuthenticationState } from "@/services/auth/bootstrap";
-import { explicitDemoSessionService } from "@/services/auth/demo-session";
+import { resolveApplicationBootstrap } from "@/services/auth/bootstrap";
 import { unconfiguredProductionSessionService } from "@/services/auth/unconfigured-production";
+
+async function loadExplicitDemoSessionService() {
+  const { explicitDemoSessionService } =
+    await import("@/services/auth/demo-session");
+  return explicitDemoSessionService;
+}
 
 export default async function Home() {
   const cookieStore = await cookies();
   const initialLocale = resolveLocale(
     cookieStore.get(LOCALE_COOKIE_NAME)?.value,
   );
-  const demoEnabled = isDemoRoleSwitcherEnabled();
-  const authenticationState = await resolveInitialAuthenticationState(
-    demoEnabled,
+  const trustedDemoGate = isTrustedDemoModeEnabled();
+  const bootstrap = await resolveApplicationBootstrap(
+    trustedDemoGate,
     unconfiguredProductionSessionService,
-    explicitDemoSessionService,
+    loadExplicitDemoSessionService,
   );
+
+  if (
+    bootstrap.demoEnabled &&
+    bootstrap.authenticationState.status === "authenticated"
+  ) {
+    return (
+      <DemoAppShell
+        authenticatedUser={bootstrap.authenticationState.user}
+        branding={baseBrand}
+        featureFlags={bootstrap.featureFlags}
+        initialLocale={initialLocale}
+      />
+    );
+  }
 
   return (
     <AuthenticationBoundary
-      authenticationState={authenticationState}
+      authenticationState={bootstrap.authenticationState}
       branding={baseBrand}
-      enableDemoRoleSwitcher={demoEnabled}
-      featureFlags={demoFeatureFlags}
+      featureFlags={bootstrap.featureFlags}
       initialLocale={initialLocale}
     />
   );

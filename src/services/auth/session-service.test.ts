@@ -42,6 +42,12 @@ function dependencies() {
         platformId: "platform-1",
         organizations: [{ id: "organization-1" }],
         facilities: [{ id: "facility-1", organizationId: "organization-1" }],
+        featureFlags: {
+          announcements: true,
+          zebra_labels: true,
+          new_request: true,
+          controlled_medicines: false,
+        },
       }),
     },
   };

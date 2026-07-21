@@ -97,18 +97,21 @@ function useMobileViewport(): boolean {
 export interface AppShellProps {
   authenticatedUser: AuthenticatedUser;
   branding: BrandingConfiguration;
-  enableDemoRoleSwitcher: boolean;
   featureFlags: FeatureFlagSet;
   initialLocale: Locale;
 }
 
-export function AppShell({
+interface AppShellContentProps extends AppShellProps {
+  demoRoleSwitcher: boolean;
+}
+
+function AppShellContent({
   authenticatedUser,
   branding,
-  enableDemoRoleSwitcher,
+  demoRoleSwitcher,
   featureFlags,
   initialLocale,
-}: AppShellProps) {
+}: AppShellContentProps) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [demoRole, setDemoRole] = useState<RoleId>(
     authenticatedUser.roleAssignments.at(0)?.role ??
@@ -121,14 +124,14 @@ export function AppShell({
   const isMobile = useMobileViewport();
   const roleAssignments = useMemo(
     () =>
-      enableDemoRoleSwitcher
+      demoRoleSwitcher
         ? [{ role: demoRole, scope: authenticatedUser.activeScope }]
         : authenticatedUser.roleAssignments,
     [
       authenticatedUser.activeScope,
       authenticatedUser.roleAssignments,
       demoRole,
-      enableDemoRoleSwitcher,
+      demoRoleSwitcher,
     ],
   );
   const dictionary = getDictionary(locale);
@@ -285,14 +288,14 @@ export function AppShell({
           <div className="topbar-context">
             <span className="status-dot" />
             <span>
-              {enableDemoRoleSwitcher
+              {demoRoleSwitcher
                 ? dictionary.shell.demoMode
                 : dictionary.shell.authenticatedSession}
             </span>
           </div>
 
           <div className="topbar-controls">
-            {enableDemoRoleSwitcher ? (
+            {demoRoleSwitcher ? (
               <label className="control-field">
                 <span>{dictionary.shell.role}</span>
                 <select
@@ -423,4 +426,12 @@ export function AppShell({
       </div>
     </div>
   );
+}
+
+export function AppShell(props: AppShellProps) {
+  return <AppShellContent {...props} demoRoleSwitcher={false} />;
+}
+
+export function DemoAppShell(props: AppShellProps) {
+  return <AppShellContent {...props} demoRoleSwitcher />;
 }

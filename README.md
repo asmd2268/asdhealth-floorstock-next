@@ -24,11 +24,11 @@ The checked-in demo represents one hospital. Its types and scope checks support 
 
 Authentication state is a discriminated union: `loading`, `unauthenticated`, `authenticated`, or `error`. Errors carry typed access-denied or provider-failure reasons rather than generic exceptions.
 
-The session resolver treats provider identity as proof of identity only. Tenant membership, organization and facility membership, role assignments, account status, and explicit permission overrides must come from the trusted repository boundaries. It rejects disabled or incomplete profiles, unknown roles, mismatched tenants, invalid facility relationships, malformed permission overrides, and invalid role scopes. It then selects a valid active facility and emits the canonical authenticated user used by the application shell.
+The session resolver treats provider identity as proof of identity only. Tenant membership, organization and facility membership, role assignments, account status, explicit permission overrides, and the complete feature-flag set must come from trusted repository boundaries. It rejects disabled or incomplete profiles, unknown roles, mismatched tenants, invalid facility relationships, malformed permission overrides, invalid role scopes, and missing or incomplete tenant feature flags. It then selects a valid active facility and emits the canonical authenticated user and trusted feature flags used by the application shell.
 
 Role assignments remain scoped and are evaluated centrally for each permission target. Explicit deny overrides explicit allow, and navigation visibility is only a presentation result of authorization—it is never an authorization source. Trusted authorization state is not stored in local storage.
 
-No Firebase authentication adapter is active yet. Production mode renders the signed-out boundary and cannot fall back to demo identity. Sign-in controls are intentionally disabled placeholders until a production session mechanism and trusted repositories are connected.
+No Firebase authentication adapter is active yet. Production mode renders the signed-out boundary with every feature disabled and cannot fall back to demo identity or demo tenant flags. Sign-in controls are intentionally disabled placeholders until a production session mechanism and trusted repositories are connected.
 
 ## Roles
 
@@ -43,7 +43,7 @@ The canonical role identifiers are:
 - `department_user`
 - `external_pharmacy_supervisor`
 
-The role switcher is for development/demo use only. It is disabled by default and both demo identity and the switcher appear only when `NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER=true`. It is not an authentication or authorization control; without that explicit flag, no demo identity is created and the shell can only receive a resolved authenticated user.
+The role switcher is for local development/demo use only. Demo identity, demo feature flags, and the switcher require both a recognized non-production runtime and `NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER=true`. Production always disables the demo path even if the public flag is accidentally enabled. Missing or malformed runtime and flag values fail closed. The same server-derived gate selects the demo session and demo-only shell; the production `AppShell` has no client prop that can enable role substitution.
 
 ## Permission model
 

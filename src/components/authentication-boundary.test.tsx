@@ -16,7 +16,6 @@ import {
 const defaultProps: AuthenticationBoundaryProps = {
   authenticationState: { status: "loading" },
   branding: baseBrand,
-  enableDemoRoleSwitcher: false,
   featureFlags: {},
   initialLocale: "en",
 };

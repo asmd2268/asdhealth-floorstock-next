@@ -4,7 +4,11 @@ import {
   isRoleId,
   type PermissionEffect,
 } from "@/domain/access/types";
-import type { UserScope } from "@/domain/platform/types";
+import {
+  featureIds,
+  type FeatureFlagSet,
+  type UserScope,
+} from "@/domain/platform/types";
 
 import {
   accountStatuses,
@@ -36,6 +40,19 @@ function denied(reason: SessionFailureReason): SessionResolutionResult {
 
 export function providerFailure(): SessionFailure {
   return { category: "provider_error", reason: "provider_unavailable" };
+}
+
+function resolveFeatureFlags(
+  flags: TenantDirectory["featureFlags"],
+): FeatureFlagSet | null {
+  if (!flags) return null;
+  if (featureIds.some((feature) => typeof flags[feature] !== "boolean")) {
+    return null;
+  }
+
+  return Object.fromEntries(
+    featureIds.map((feature) => [feature, flags[feature]]),
+  ) as FeatureFlagSet;
 }
 
 function hasKnownAccountStatus(
@@ -184,6 +201,9 @@ export function resolveSession(
     return denied("tenant_mismatch");
   }
 
+  const featureFlags = resolveFeatureFlags(tenantDirectory.featureFlags);
+  if (!featureFlags) return denied("feature_flags_missing");
+
   const organizationId = profile.organizationId ?? null;
   if (
     organizationId &&
@@ -244,6 +264,7 @@ export function resolveSession(
 
   return {
     ok: true,
+    featureFlags,
     user: {
       uid: identity.uid,
       email: identity.email,
