@@ -10,7 +10,8 @@ import { baseBrand, demoFacilityScope } from "@/config/platform";
 import { resolveTrustedDemoGate } from "@/config/public-environment";
 import type { AuthenticatedUser } from "@/domain/auth/types";
 
-import { AppShell, DemoAppShell, type AppShellProps } from "./app-shell";
+import { AppShell, type AppShellProps } from "./app-shell";
+import { DemoAppShell } from "./demo-app-shell";
 
 const authenticatedUser: AuthenticatedUser = {
   uid: "user-1",
@@ -77,6 +78,7 @@ describe("application shell boundaries", () => {
   it("shows the demo role switcher only when explicitly enabled", () => {
     render(<DemoAppShell {...defaultProps} />);
     expect(screen.getByLabelText("Demo role")).toBeInTheDocument();
+    expect(screen.getByText("Foundation demo")).toBeInTheDocument();
   });
 
   it("cannot enable role substitution through an untrusted AppShell prop", () => {
@@ -122,6 +124,39 @@ describe("application shell boundaries", () => {
     expect(screen.queryByRole("navigation")).not.toHaveTextContent(
       "Announcements",
     );
+  });
+
+  it("uses authenticated role assignments even when substitution props are supplied", () => {
+    const untrustedProps = {
+      ...defaultProps,
+      demoRole: "department_user",
+      roleAssignments: [{ role: "department_user", scope: demoFacilityScope }],
+    };
+    render(<AppShell {...untrustedProps} />);
+
+    expect(screen.getByRole("navigation")).toHaveTextContent("Announcements");
+    expect(screen.getByRole("navigation")).not.toHaveTextContent("New request");
+  });
+
+  it("lets only DemoAppShell substitute a permission-correct role", async () => {
+    const user = userEvent.setup();
+    render(<DemoAppShell {...defaultProps} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Demo role"),
+      "department_user",
+    );
+    expect(screen.getByRole("navigation")).toHaveTextContent("Dashboard");
+    expect(screen.getByRole("navigation")).toHaveTextContent("New request");
+    expect(screen.getByRole("navigation")).not.toHaveTextContent(
+      "Announcements",
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText("Demo role"),
+      "external_pharmacy_supervisor",
+    );
+    expect(screen.getByRole("navigation")).toBeEmptyDOMElement();
   });
 
   it("propagates branding configuration and renders a safe custom logo", () => {
@@ -196,6 +231,20 @@ describe("application shell boundaries", () => {
     expect(screen.getByRole("link", { name: "Zebra labels" })).toHaveAttribute(
       "href",
       "#zebra-labels",
+    );
+  });
+
+  it("invokes sign-out and renders a safe localized failure", async () => {
+    const user = userEvent.setup();
+    const signOut = vi
+      .fn()
+      .mockResolvedValue({ ok: false, reason: "provider_unavailable" });
+    render(<AppShell {...defaultProps} signOut={signOut} />);
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-out failed. Please try again.",
     );
   });
 });

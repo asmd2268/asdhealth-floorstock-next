@@ -12,12 +12,19 @@ export interface SignInRequest {
   password: string;
 }
 
+export type AuthenticationProviderFailureReason =
+  "invalid_credentials" | "too_many_attempts" | "provider_unavailable";
+
 export type SignInResult =
   | { ok: true; identity: ProviderIdentity }
-  | { ok: false; reason: "invalid_credentials" | "provider_unavailable" };
+  | { ok: false; reason: AuthenticationProviderFailureReason };
 
 export type SignOutResult =
   { ok: true } | { ok: false; reason: "provider_unavailable" };
+
+export type IdentityResolutionResult =
+  | { ok: true; identity: ProviderIdentity | null }
+  | { ok: false; reason: "provider_unavailable" };
 
 export interface SignInService {
   signIn(request: SignInRequest): Promise<SignInResult>;
@@ -28,10 +35,16 @@ export interface SignOutService {
 }
 
 export type AuthStateListener = (identity: ProviderIdentity | null) => void;
+export type AuthStateErrorListener = (
+  reason: Extract<AuthenticationProviderFailureReason, "provider_unavailable">,
+) => void;
 
 export interface AuthenticationProvider extends SignInService, SignOutService {
-  getIdentity(): Promise<ProviderIdentity | null>;
-  subscribe(listener: AuthStateListener): () => void;
+  getIdentity(): Promise<IdentityResolutionResult>;
+  subscribe(
+    listener: AuthStateListener,
+    onError?: AuthStateErrorListener,
+  ): () => void;
 }
 
 export interface UserProfileRepository {
@@ -48,6 +61,20 @@ export interface TenantDirectoryRepository {
 
 export interface SessionResolutionService {
   resolve(): Promise<SessionResolutionResult>;
+}
+
+export interface IdentitySessionResolutionService {
+  resolveIdentity(identity: ProviderIdentity): Promise<SessionResolutionResult>;
+}
+
+export interface AuthenticationSnapshot {
+  authenticationState: AuthenticationState;
+  featureFlags: import("@/domain/platform/types").FeatureFlagSet;
+}
+
+export interface AuthenticationClientController
+  extends SignInService, SignOutService {
+  start(listener: (snapshot: AuthenticationSnapshot) => void): () => void;
 }
 
 export interface ApplicationAuthenticationService {

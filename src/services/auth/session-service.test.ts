@@ -15,7 +15,7 @@ const profile = {
 function dependencies() {
   return {
     authenticationProvider: {
-      getIdentity: vi.fn().mockResolvedValue(identity),
+      getIdentity: vi.fn().mockResolvedValue({ ok: true, identity }),
       subscribe: vi.fn(() => () => undefined),
       signIn: vi.fn(),
       signOut: vi.fn(),
@@ -56,7 +56,10 @@ function dependencies() {
 describe("session service boundary", () => {
   it("does not query trusted profile data for an unauthenticated provider", async () => {
     const deps = dependencies();
-    deps.authenticationProvider.getIdentity.mockResolvedValue(null);
+    deps.authenticationProvider.getIdentity.mockResolvedValue({
+      ok: true,
+      identity: null,
+    });
     const service = createSessionResolutionService(deps);
 
     await expect(service.resolve()).resolves.toEqual({

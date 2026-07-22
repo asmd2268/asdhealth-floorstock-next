@@ -4,7 +4,7 @@ import "@testing-library/jest-dom/vitest";
 
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { baseBrand } from "@/config/platform";
 
@@ -83,6 +83,29 @@ describe("authentication boundary", () => {
     ).toBeInTheDocument();
   });
 
+  it("allows a denied Firebase identity to sign out safely", async () => {
+    const user = userEvent.setup();
+    const signOut = vi
+      .fn()
+      .mockResolvedValue({ ok: false, reason: "provider_unavailable" });
+    render(
+      <AuthenticationBoundary
+        {...defaultProps}
+        authenticationState={{
+          status: "error",
+          failure: { category: "access_denied", reason: "profile_not_found" },
+        }}
+        signOut={signOut}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-out failed. Please try again.",
+    );
+  });
+
   it("renders Arabic auth states RTL and persists an English switch", async () => {
     const user = userEvent.setup();
     render(
@@ -122,5 +145,121 @@ describe("authentication boundary", () => {
     expect(screen.getByText("Regional Floor Stock")).toBeInTheDocument();
     expect(screen.getByText("Regional Health")).toBeInTheDocument();
     expect(screen.getByText("Owned by Regional Health")).toBeInTheDocument();
+  });
+
+  it("validates email and required password before sign-in", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn();
+    render(
+      <AuthenticationBoundary
+        {...defaultProps}
+        authenticationState={{ status: "unauthenticated" }}
+        signIn={signIn}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Email address"), "invalid-email");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(
+      screen.getByText("Enter a valid email address."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Enter your password.")).toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it("submits credentials and renders only normalized authentication errors", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: "invalid_credentials",
+    });
+    render(
+      <AuthenticationBoundary
+        {...defaultProps}
+        authenticationState={{ status: "unauthenticated" }}
+        signIn={signIn}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Email address"), "user@example.com");
+    await user.type(screen.getByLabelText("Password"), "secret");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(signIn).toHaveBeenCalledWith({
+      email: "user@example.com",
+      password: "secret",
+    });
+    expect(
+      await screen.findByText("Email or password is incorrect."),
+    ).toHaveAttribute("role", "alert");
+    expect(document.body).not.toHaveTextContent("Firebase");
+  });
+
+  it("renders localized Arabic validation and provider errors", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: "provider_unavailable",
+    });
+    render(
+      <AuthenticationBoundary
+        {...defaultProps}
+        authenticationState={{ status: "unauthenticated" }}
+        initialLocale="ar"
+        signIn={signIn}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "تسجيل الدخول" }));
+    expect(
+      screen.getByText("أدخل بريدًا إلكترونيًا صالحًا."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("أدخل كلمة المرور.")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("البريد الإلكتروني"),
+      "user@example.com",
+    );
+    await user.type(screen.getByLabelText("كلمة المرور"), "secret");
+    await user.click(screen.getByRole("button", { name: "تسجيل الدخول" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "تسجيل الدخول غير متاح. يرجى المحاولة لاحقًا.",
+    );
+  });
+
+  it("disables the form and shows a submitting state", async () => {
+    const user = userEvent.setup();
+    let finish:
+      | ((value: { ok: false; reason: "provider_unavailable" }) => void)
+      | undefined;
+    const signIn = vi.fn(
+      () =>
+        new Promise<{ ok: false; reason: "provider_unavailable" }>(
+          (resolve) => {
+            finish = resolve;
+          },
+        ),
+    );
+    render(
+      <AuthenticationBoundary
+        {...defaultProps}
+        authenticationState={{ status: "unauthenticated" }}
+        signIn={signIn}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Email address"), "user@example.com");
+    await user.type(screen.getByLabelText("Password"), "secret");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.getByRole("button", { name: "Signing in…" })).toBeDisabled();
+    expect(screen.getByLabelText("Email address")).toBeDisabled();
+
+    finish?.({ ok: false, reason: "provider_unavailable" });
+    expect(
+      await screen.findByText(
+        "Sign-in is unavailable. Please try again later.",
+      ),
+    ).toBeInTheDocument();
   });
 });
