@@ -47,6 +47,8 @@ The canonical role identifiers are:
 
 The role switcher is for local development/demo use only. Demo identity, demo feature flags, and the switcher require both a recognized non-production runtime and `NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER=true`. Production always disables the demo path even if the public flag is accidentally enabled. Missing or malformed runtime and flag values fail closed. The same server-derived gate selects the demo session and demo-only shell; the production `AppShell` has no client prop that can enable role substitution.
 
+Production and demo shell entry points are physically separate. `AppShell` always forwards the authenticated user’s resolved role assignments and authenticated-session label. `DemoAppShell` alone imports role identifiers, owns the selected demo role, and constructs substituted assignments. Both render through a neutral presentational shell that receives already-resolved assignments and controls, and the server loads the demo component only after the trusted demo gate succeeds.
+
 ## Permission model
 
 Permission checks use the pure `resolvePermission`, `can`, and `canAccessFeature` functions. Every request includes a role, resource, action, subject scope, and target scope. The permission layer derives feature identity canonically from the resource, so callers cannot bypass feature gates by omitting feature metadata. Missing feature flags deny feature-backed resources.
