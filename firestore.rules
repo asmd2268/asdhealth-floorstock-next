@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownProfile() {
+      return get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data;
+    }
+
+    match /userProfiles/{uid} {
+      allow get: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /userRoleAssignments/{uid}/assignments/{assignmentId} {
+      allow get, list: if signedIn()
+        && request.auth.uid == uid
+        && ownProfile().accountStatus == 'active'
+        && resource.data.uid == uid
+        && resource.data.tenantId == ownProfile().tenantId;
+      allow create, update, delete: if false;
+    }
+
+    match /tenantDirectories/{tenantId} {
+      allow get: if signedIn()
+        && ownProfile().uid == request.auth.uid
+        && ownProfile().accountStatus == 'active'
+        && ownProfile().tenantId == tenantId
+        && resource.data.tenantId == tenantId
+        && resource.data.status == 'active';
+      allow list, create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

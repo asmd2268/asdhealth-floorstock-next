@@ -68,6 +68,7 @@ export interface TenantFacilityRecord {
 
 export interface TenantDirectory {
   tenantId: string;
+  status: "active" | "inactive";
   platformId: string;
   organizations: readonly TenantOrganizationRecord[];
   facilities: readonly TenantFacilityRecord[];
@@ -97,6 +98,7 @@ export type SessionFailureReason =
   | "account_disabled"
   | "account_inactive"
   | "tenant_not_found"
+  | "tenant_inactive"
   | "tenant_mismatch"
   | "organization_mismatch"
   | "facility_mismatch"
