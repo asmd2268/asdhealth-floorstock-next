@@ -200,6 +200,7 @@ export function resolveSession(
   if (profile.tenantId !== tenantDirectory.tenantId) {
     return denied("tenant_mismatch");
   }
+  if (tenantDirectory.status !== "active") return denied("tenant_inactive");
 
   const featureFlags = resolveFeatureFlags(tenantDirectory.featureFlags);
   if (!featureFlags) return denied("feature_flags_missing");

@@ -52,7 +52,10 @@ export interface UserProfileRepository {
 }
 
 export interface RoleAssignmentRepository {
-  listByUid(uid: string): Promise<readonly RoleAssignmentRecord[]>;
+  listByUid(
+    uid: string,
+    tenantId: string,
+  ): Promise<readonly RoleAssignmentRecord[]>;
 }
 
 export interface TenantDirectoryRepository {

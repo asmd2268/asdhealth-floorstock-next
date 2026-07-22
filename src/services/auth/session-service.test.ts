@@ -39,6 +39,7 @@ function dependencies() {
     tenantDirectories: {
       getByTenantId: vi.fn().mockResolvedValue({
         tenantId: "tenant-1",
+        status: "active",
         platformId: "platform-1",
         organizations: [{ id: "organization-1" }],
         facilities: [{ id: "facility-1", organizationId: "organization-1" }],
@@ -71,7 +72,8 @@ describe("session service boundary", () => {
   });
 
   it("resolves server-owned profile, roles, and tenant directory", async () => {
-    const service = createSessionResolutionService(dependencies());
+    const deps = dependencies();
+    const service = createSessionResolutionService(deps);
     const result = await service.resolve();
 
     expect(result.ok).toBe(true);
@@ -79,6 +81,13 @@ describe("session service boundary", () => {
       expect(result.user.uid).toBe(identity.uid);
       expect(result.user.roleAssignments[0]?.role).toBe("pharmacy_staff");
     }
+    expect(deps.roleAssignments.listByUid).toHaveBeenCalledWith(
+      identity.uid,
+      "tenant-1",
+    );
+    expect(deps.tenantDirectories.getByTenantId).toHaveBeenCalledWith(
+      "tenant-1",
+    );
   });
 
   it("maps adapter failures to a typed provider error", async () => {

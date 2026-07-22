@@ -45,6 +45,7 @@ const demoAssignments: readonly RoleAssignmentRecord[] = [
 
 const demoTenantDirectory: TenantDirectory = {
   tenantId: "demo-tenant",
+  status: "active",
   platformId: demoPlatform.id,
   organizations: [{ id: demoOrganization.id }],
   facilities: [{ id: demoFacility.id, organizationId: demoOrganization.id }],

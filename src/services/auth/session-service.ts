@@ -40,11 +40,21 @@ export function createIdentitySessionResolutionService(
           });
         }
 
+        if (!profile.tenantId) {
+          return resolveSession({
+            identity,
+            profile,
+            roleAssignments: [],
+            tenantDirectory: null,
+          });
+        }
+
         const [assignments, tenantDirectory] = await Promise.all([
-          dependencies.roleAssignments.listByUid(identity.uid),
-          profile.tenantId
-            ? dependencies.tenantDirectories.getByTenantId(profile.tenantId)
-            : Promise.resolve(null),
+          dependencies.roleAssignments.listByUid(
+            identity.uid,
+            profile.tenantId,
+          ),
+          dependencies.tenantDirectories.getByTenantId(profile.tenantId),
         ]);
 
         return resolveSession({

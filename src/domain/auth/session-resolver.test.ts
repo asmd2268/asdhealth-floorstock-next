@@ -17,6 +17,7 @@ const identity = {
 
 const directory = {
   tenantId: "tenant-1",
+  status: "active",
   platformId: "platform-1",
   organizations: [{ id: "organization-1" }],
   facilities: [
@@ -108,6 +109,18 @@ describe("session resolver", () => {
         ),
       ),
     ).toBe("tenant_mismatch");
+  });
+
+  it("denies an inactive tenant", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: { ...directory, status: "inactive" },
+          }),
+        ),
+      ),
+    ).toBe("tenant_inactive");
   });
 
   it("denies a session when trusted tenant feature flags are missing", () => {
