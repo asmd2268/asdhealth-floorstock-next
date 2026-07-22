@@ -5,23 +5,34 @@ import type {
 
 const forbiddenMetadataKey =
   /secret|token|password|credential|private.?key|authorization|cookie/i;
+const forbiddenMetadataValue =
+  /authorization\s*:\s*bearer|(?:^|\s)bearer\s+[a-z0-9._~+/-]{8,}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|(?:cookie|session(?:id|token)?|access[_ -]?token|refresh[_ -]?token|password|credentials?)\s*(?::|=|\b(?:is|are|was)\b)\s*\S+/i;
 const maxMetadataEntries = 20;
+const maxMetadataKeyLength = 64;
 const maxMetadataStringLength = 128;
+const maxMetadataInspectionLength = 4_096;
 
 export function sanitizeAuditMetadata(
   input: Readonly<Record<string, unknown>>,
 ): ProvisioningAuditEvent["metadata"] {
   const output: Record<string, string | number | boolean | null> = {};
 
-  for (const [key, value] of Object.entries(input).slice(
-    0,
-    maxMetadataEntries,
+  for (const [key, value] of Object.entries(input).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
   )) {
-    if (forbiddenMetadataKey.test(key)) continue;
+    if (Object.keys(output).length >= maxMetadataEntries) break;
+    if (key.length > maxMetadataKeyLength || forbiddenMetadataKey.test(key)) {
+      continue;
+    }
     if (typeof value === "string") {
+      if (
+        forbiddenMetadataValue.test(value.slice(0, maxMetadataInspectionLength))
+      ) {
+        continue;
+      }
       output[key] = value.slice(0, maxMetadataStringLength);
     } else if (
-      typeof value === "number" ||
+      (typeof value === "number" && Number.isFinite(value)) ||
       typeof value === "boolean" ||
       value === null
     ) {
@@ -33,6 +44,7 @@ export function sanitizeAuditMetadata(
 }
 
 export function createAuditEvent(
+  eventId: string,
   context: ProvisioningRequestContext,
   input: Omit<
     ProvisioningAuditEvent,
@@ -41,7 +53,7 @@ export function createAuditEvent(
   now: () => Date,
 ): ProvisioningAuditEvent {
   return {
-    eventId: context.requestId,
+    eventId,
     actor: context.actor,
     action: input.action,
     targetType: input.targetType,

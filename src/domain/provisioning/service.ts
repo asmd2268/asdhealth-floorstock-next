@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+
 import { ZodError, type ZodType } from "zod";
 
 import type { AssignmentScopeRecord } from "@/domain/auth/types";
@@ -7,9 +9,13 @@ import {
   parseTrustedUserProfile,
 } from "@/services/firebase/trusted-session-records";
 import { trustedSessionLimits } from "@/services/firebase/trusted-session-limits";
+import { requireCanonicalTrustedIdentifier } from "@/services/firebase/trusted-identifier";
 
 import { createAuditEvent } from "./audit";
-import { canAdministratorPerform } from "./authorization";
+import {
+  canAdministratorPerform,
+  isTenantAdministratorAuthorizedForDirectory,
+} from "./authorization";
 import {
   assignRoleSchema,
   createTenantSchema,
@@ -60,7 +66,25 @@ const paths = {
     ] as ProvisioningDocumentPath,
   audit: (eventId: string) =>
     ["provisioningAuditEvents", eventId] as ProvisioningDocumentPath,
+  requestKey: (namespaceId: string) =>
+    ["provisioningRequestKeys", namespaceId] as ProvisioningDocumentPath,
 };
+
+function requestNamespaceId(
+  context: ProvisioningRequestContext,
+  tenantId: string,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        "provisioning-request-v1",
+        context.actor.uid,
+        tenantId,
+        context.requestId,
+      ]),
+    )
+    .digest("hex");
+}
 
 function reject(code: ProvisioningFailureCode): never {
   throw new ProvisioningOperationError(code);
@@ -92,6 +116,7 @@ function authorizeScope(
   if (scope.platformId !== actor.platformId) reject("forbidden");
   if (actor.kind === "platform_owner") return;
   if (scope.kind === "platform") reject("forbidden");
+  if (actor.scope === "unrestricted") return;
   if (!actor.organizationIds.includes(scope.organizationId)) {
     reject("forbidden");
   }
@@ -114,7 +139,7 @@ function authorizeProfileMembership(
   actor: AdministratorPrincipal,
   profile: ReturnType<typeof parseTrustedUserProfile>,
 ): void {
-  if (actor.kind !== "tenant_admin") return;
+  if (actor.kind !== "tenant_admin" || actor.scope === "unrestricted") return;
   if (
     !profile.organizationId ||
     !profile.facilityIds ||
@@ -177,11 +202,30 @@ function validateScopeInTenant(
 async function requireTenant(
   transaction: ProvisioningTransaction,
   tenantId: string,
+  actor: AdministratorPrincipal,
 ) {
   const document = await transaction.get(paths.tenant(tenantId));
-  if (!document) reject("not_found");
-  const directory = parseTrustedTenantDirectory(document);
-  if (directory.tenantId !== tenantId) reject("conflict");
+  if (!document) {
+    if (actor.kind === "tenant_admin") reject("forbidden");
+    reject("not_found");
+  }
+  let directory: ReturnType<typeof parseTrustedTenantDirectory>;
+  try {
+    directory = parseTrustedTenantDirectory(document);
+  } catch (error) {
+    if (actor.kind === "tenant_admin") reject("forbidden");
+    throw error;
+  }
+  if (directory.tenantId !== tenantId) {
+    if (actor.kind === "tenant_admin") reject("forbidden");
+    reject("conflict");
+  }
+  if (
+    actor.kind === "tenant_admin" &&
+    !isTenantAdministratorAuthorizedForDirectory(actor, directory)
+  ) {
+    reject("forbidden");
+  }
   return directory;
 }
 
@@ -248,8 +292,9 @@ export interface TrustedProvisioningService {
 export function createTrustedProvisioningService(
   store: ProvisioningStore,
   now: () => Date = () => new Date(),
+  auditIdGenerator: () => string = randomUUID,
 ): TrustedProvisioningService {
-  async function execute<T>(
+  async function execute<T extends { tenantId: string }>(
     contextValue: ProvisioningRequestContext,
     inputValue: T,
     schema: ZodType<T>,
@@ -262,9 +307,18 @@ export function createTrustedProvisioningService(
     try {
       const context = parse(requestContextSchema, contextValue);
       const input = parse(schema, inputValue);
-      await store.runTransaction((transaction) =>
-        operation(transaction, context, input),
-      );
+      await store.runTransaction(async (transaction) => {
+        const namespaceId = requestNamespaceId(context, input.tenantId);
+        if (await transaction.get(paths.requestKey(namespaceId))) {
+          reject("conflict");
+        }
+        await operation(transaction, context, input);
+        transaction.create(paths.requestKey(namespaceId), {
+          actorUid: context.actor.uid,
+          tenantId: input.tenantId,
+          requestId: context.requestId,
+        });
+      });
       return { ok: true };
     } catch (error) {
       return mapFailure(error);
@@ -274,9 +328,10 @@ export function createTrustedProvisioningService(
   function appendAudit(
     transaction: ProvisioningTransaction,
     context: ProvisioningRequestContext,
-    input: Parameters<typeof createAuditEvent>[1],
+    input: Parameters<typeof createAuditEvent>[2],
   ): void {
-    const event = createAuditEvent(context, input, now);
+    const eventId = requireCanonicalTrustedIdentifier(auditIdGenerator());
+    const event = createAuditEvent(eventId, context, input, now);
     transaction.create(paths.audit(event.eventId), event);
   }
 
@@ -320,10 +375,15 @@ export function createTrustedProvisioningService(
         upsertFacilitySchema,
         async (transaction, ctx, value) => {
           authorizeTenant(ctx.actor, "upsert_facility", value.tenantId);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
           if (
             ctx.actor.kind === "tenant_admin" &&
+            ctx.actor.scope === "restricted" &&
             !ctx.actor.organizationIds.includes(value.facility.organizationId)
           ) {
             reject("forbidden");
@@ -343,9 +403,18 @@ export function createTrustedProvisioningService(
           if (
             index >= 0 &&
             ctx.actor.kind === "tenant_admin" &&
+            ctx.actor.scope === "restricted" &&
             !ctx.actor.organizationIds.includes(
               facilities[index].organizationId,
             )
+          ) {
+            reject("forbidden");
+          }
+          if (
+            index >= 0 &&
+            ctx.actor.kind === "tenant_admin" &&
+            ctx.actor.scope === "restricted" &&
+            !ctx.actor.facilityIds.includes(value.facility.id)
           ) {
             reject("forbidden");
           }
@@ -380,7 +449,11 @@ export function createTrustedProvisioningService(
         async (transaction, ctx, value) => {
           authorizeTenant(ctx.actor, "upsert_user_profile", value.tenantId);
           ensureNoSelfAdministration(ctx.actor, value.uid);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
 
           const existingDocument = await transaction.get(
@@ -425,7 +498,10 @@ export function createTrustedProvisioningService(
           ) {
             reject("invalid_request");
           }
-          if (ctx.actor.kind === "tenant_admin") {
+          if (
+            ctx.actor.kind === "tenant_admin" &&
+            ctx.actor.scope === "restricted"
+          ) {
             const tenantAdministrator = ctx.actor;
             if (
               value.organizationId === null ||
@@ -467,7 +543,11 @@ export function createTrustedProvisioningService(
         async (transaction, ctx, value) => {
           authorizeTenant(ctx.actor, "set_account_status", value.tenantId);
           ensureNoSelfAdministration(ctx.actor, value.uid);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
           const profile = await requireProfile(
             transaction,
@@ -498,7 +578,11 @@ export function createTrustedProvisioningService(
           authorizeTenant(ctx.actor, "assign_role", value.tenantId);
           ensureNoSelfAdministration(ctx.actor, value.uid);
           authorizeScope(ctx.actor, value.scope);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
           validateScopeInTenant(value.scope, directory);
           const profile = await requireProfile(
@@ -563,7 +647,11 @@ export function createTrustedProvisioningService(
         async (transaction, ctx, value) => {
           authorizeTenant(ctx.actor, "revoke_role_assignment", value.tenantId);
           ensureNoSelfAdministration(ctx.actor, value.uid);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
           const assignmentPath = paths.assignment(
             value.uid,
@@ -604,7 +692,11 @@ export function createTrustedProvisioningService(
         replaceFeatureFlagsSchema,
         async (transaction, ctx, value) => {
           authorizeTenant(ctx.actor, "replace_feature_flags", value.tenantId);
-          const directory = await requireTenant(transaction, value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
           requireActorPlatform(ctx.actor, directory.platformId);
           transaction.set(paths.tenant(value.tenantId), {
             ...directory,

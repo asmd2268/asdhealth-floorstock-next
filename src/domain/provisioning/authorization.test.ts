@@ -9,11 +9,19 @@ const platformOwner = {
 } as const;
 const tenantAdministrator = {
   kind: "tenant_admin",
+  scope: "restricted",
   uid: "admin-1",
   platformId: "platform-1",
   tenantId: "tenant-1",
   organizationIds: ["organization-1"],
   facilityIds: ["facility-1"],
+} as const;
+const unrestrictedTenantAdministrator = {
+  kind: "tenant_admin",
+  scope: "unrestricted",
+  uid: "admin-unrestricted",
+  platformId: "platform-1",
+  tenantId: "tenant-1",
 } as const;
 
 describe("administrator action defaults", () => {
@@ -39,6 +47,22 @@ describe("administrator action defaults", () => {
         platformId: "platform-1",
       }),
     ).toBe(false);
+    expect(
+      canAdministratorPerform(tenantAdministrator, "replace_feature_flags", {
+        tenantId: "tenant-1",
+        platformId: "platform-1",
+      }),
+    ).toBe(false);
+    expect(
+      canAdministratorPerform(
+        unrestrictedTenantAdministrator,
+        "replace_feature_flags",
+        {
+          tenantId: "tenant-1",
+          platformId: "platform-1",
+        },
+      ),
+    ).toBe(true);
     expect(
       canAdministratorPerform(tenantAdministrator, "replace_feature_flags", {
         tenantId: "tenant-other",

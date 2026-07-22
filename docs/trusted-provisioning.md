@@ -25,11 +25,27 @@ Administrative authority is provisioned out of band in:
 The document UID must match the verified Firebase UID and must validate as one of:
 
 - platform_owner: UID and platform ID;
-- tenant_admin: UID, platform ID, tenant ID, allowed organization IDs, and allowed facility IDs.
+- unrestricted tenant_admin: UID, platform ID, tenant ID, and explicit unrestricted scope; or
+- restricted tenant_admin: UID, platform ID, tenant ID, and explicit allowed organization and facility IDs.
 
-Platform owners may create tenants and assign platform-scoped roles only within their platform. Tenant administrators may mutate only their tenant. Organization and facility restrictions are enforced for profiles, accounts, overrides, and roles. Administrators cannot modify their own profile, account status, or role assignments through this service.
+Tenant administrators are usable only while their trusted tenant directory exists, validates, is active, and matches their platform and tenant. This is enforced during principal resolution and again inside each service transaction; failures return only `forbidden`. Platform owners retain the action matrix's platform-level authority, including administration of inactive tenants, and remain platform-bound.
+
+Restricted tenant administrators may administer only users, roles, overrides, and existing facilities inside both their assigned organization and facility sets. They may create a facility inside an assigned organization, but creation does not mutate their principal or automatically add the new facility to their manageable facility set. Tenant-wide feature-flag replacement requires an unrestricted tenant administrator or platform owner. Unrestricted tenant administrators remain limited to their own active tenant and platform. Administrators cannot modify their own profile, account status, or role assignments through this service.
 
 Administrator records are not managed by the public API and browser clients cannot read or write them.
+
+### Authorization matrix
+
+| Action                       | Platform owner | Unrestricted tenant admin | Restricted tenant admin                                    |
+| ---------------------------- | -------------- | ------------------------- | ---------------------------------------------------------- |
+| Create tenant                | Same platform  | Denied                    | Denied                                                     |
+| Add/update facility          | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Create/update profile        | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Activate/deactivate account  | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Assign/revoke role           | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Replace tenant feature flags | Same platform  | Own active tenant         | Denied                                                     |
+
+Platform-owner access to inactive tenants is intentional for every same-platform action above except tenant creation, which always creates a new active tenant. Tenant administrators are denied for every operation unless their directory is active.
 
 ## Operations and routes
 
@@ -51,11 +67,13 @@ Every mutation and its audit event are written in the same Firestore transaction
 
 Audit records are created at:
 
-    provisioningAuditEvents/{requestId}
+    provisioningAuditEvents/{serverGeneratedEventId}
 
-The correlation ID is also the event ID, so reuse fails instead of overwriting an earlier event. Events contain the validated actor principal, action, target type and ID, tenant, timestamp, request ID, and bounded sanitized metadata. Passwords, tokens, credentials, private keys, cookies, authorization headers, nested objects, and raw provider errors are never accepted as audit metadata.
+The validated client correlation ID remains an audit field but never controls the audit document path. A separate request marker uses a collision-resistant hash of trusted actor UID, target tenant, and correlation ID. Reuse by that same actor and tenant returns a conflict; another actor or tenant cannot reserve the namespace. The mutation, generated audit event, and request marker commit in one transaction, so audit or marker failure rolls back every write.
 
-Browser reads and all browser writes to audit records are denied. Audit provisioning is append-only at both the service and rules boundaries.
+Audit metadata accepts only top-level string, finite number, boolean, or null values. It stores at most 20 fields, 64 characters per key, and 128 characters per string after inspecting up to 4,096 characters for forbidden content; keys are sorted deterministically. Sensitive key names and secret-bearing free text—including bearer authorization, private-key blocks, cookies, session/access/refresh tokens, passwords, and credentials—are omitted. Nested values, Error objects, provider errors, and stack structures are never recorded. Each operation supplies its own small structured metadata object rather than accepting audit metadata from the request body.
+
+Browser reads and all browser writes to audit records and request markers are denied. Audit provisioning is append-only at both the service and rules boundaries.
 
 ## Server environment
 

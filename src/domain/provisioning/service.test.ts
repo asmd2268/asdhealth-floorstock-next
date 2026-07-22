@@ -62,11 +62,20 @@ const platformOwner: AdministratorPrincipal = {
 
 const tenantAdministrator: AdministratorPrincipal = {
   kind: "tenant_admin",
+  scope: "restricted",
   uid: "tenant-admin-1",
   platformId: "platform-1",
   tenantId: "tenant-1",
   organizationIds: ["organization-1"],
-  facilityIds: ["facility-1", "facility-2"],
+  facilityIds: ["facility-1"],
+};
+
+const unrestrictedTenantAdministrator: AdministratorPrincipal = {
+  kind: "tenant_admin",
+  scope: "unrestricted",
+  uid: "tenant-admin-unrestricted",
+  platformId: "platform-1",
+  tenantId: "tenant-1",
 };
 
 function key(path: ProvisioningDocumentPath) {
@@ -137,13 +146,23 @@ function seededStore() {
   ]);
 }
 
+function createService(
+  store: ProvisioningStore,
+  now: () => Date = () => new Date("2026-07-22T00:00:00.000Z"),
+  auditIdGenerator?: () => string,
+) {
+  let auditSequence = 0;
+  return createTrustedProvisioningService(
+    store,
+    now,
+    auditIdGenerator ?? (() => `audit-${++auditSequence}`),
+  );
+}
+
 describe("trusted provisioning service", () => {
   it("allows a platform owner to create a tenant and atomically audits it", async () => {
     const store = new MemoryProvisioningStore();
-    const service = createTrustedProvisioningService(
-      store,
-      () => new Date("2026-07-22T00:00:00.000Z"),
-    );
+    const service = createService(store);
 
     await expect(
       service.createTenant(context(), {
@@ -162,8 +181,10 @@ describe("trusted provisioning service", () => {
       status: "active",
     });
     expect(
-      store.documents.get("provisioningAuditEvents/request-1"),
+      store.documents.get("provisioningAuditEvents/audit-1"),
     ).toMatchObject({
+      eventId: "audit-1",
+      requestId: "request-1",
       actor: platformOwner,
       action: "create_tenant",
       targetId: "tenant-new",
@@ -192,6 +213,36 @@ describe("trusted provisioning service", () => {
         }
       ).facilities.map((facility) => facility.id),
     ).toEqual(["facility-1", "facility-2"]);
+
+    await expect(
+      service.upsertFacility(context(tenantAdministrator, "update-existing"), {
+        tenantId: "tenant-1",
+        facility: tenantDirectory.facilities[0],
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("returns a safe denial for missing or malformed tenant-admin directories", async () => {
+    for (const tenantDocument of [
+      null,
+      { tenantId: "tenant-1", status: "active" },
+    ]) {
+      const store = seededStore();
+      if (tenantDocument === null) {
+        store.documents.delete("tenantDirectories/tenant-1");
+      } else {
+        store.documents.set("tenantDirectories/tenant-1", tenantDocument);
+      }
+      const before = new Map(store.documents);
+
+      await expect(
+        createService(store).upsertFacility(context(tenantAdministrator), {
+          tenantId: "tenant-1",
+          facility: tenantDirectory.facilities[0],
+        }),
+      ).resolves.toEqual({ ok: false, code: "forbidden" });
+      expect(store.documents).toEqual(before);
+    }
   });
 
   it("denies tenant creation by a tenant administrator", async () => {
@@ -273,12 +324,11 @@ describe("trusted provisioning service", () => {
     await expect(
       service.assignRole(context(platformOwner, "request-scope"), invalidScope),
     ).resolves.toEqual({ ok: false, code: "invalid_request" });
-    expect(store.documents.has("provisioningAuditEvents/request-unknown")).toBe(
-      false,
-    );
-    expect(store.documents.has("provisioningAuditEvents/request-scope")).toBe(
-      false,
-    );
+    expect(
+      [...store.documents.keys()].some((path) =>
+        path.startsWith("provisioningAuditEvents/"),
+      ),
+    ).toBe(false);
   });
 
   it("does not silently create a missing parent tenant or profile", async () => {
@@ -466,7 +516,7 @@ describe("trusted provisioning service", () => {
     expect(store.documents).toEqual(before);
   });
 
-  it("keeps audit events append-only and rolls back a reused request ID", async () => {
+  it("handles duplicate requests only inside the same actor and tenant namespace", async () => {
     const store = seededStore();
     const service = createTrustedProvisioningService(store);
 
@@ -484,8 +534,259 @@ describe("trusted provisioning service", () => {
         tenantId: "tenant-1",
         accountStatus: "active",
       }),
-    ).toEqual({ ok: false, code: "provider_unavailable" });
+    ).toEqual({ ok: false, code: "conflict" });
     expect(store.documents).toEqual(snapshot);
+  });
+
+  it("isolates equal request IDs across tenants and actors", async () => {
+    const secondTenant = {
+      ...tenantDirectory,
+      tenantId: "tenant-2",
+      organizations: [{ id: "organization-2" }],
+      facilities: [{ id: "facility-2", organizationId: "organization-2" }],
+    };
+    const store = seededStore();
+    store.documents.set("tenantDirectories/tenant-2", secondTenant);
+    store.documents.set("userProfiles/user-2", {
+      ...userProfile,
+      uid: "user-2",
+    });
+    const service = createService(store);
+
+    expect(
+      await service.replaceFeatureFlags(context(platformOwner, "shared-id"), {
+        tenantId: "tenant-1",
+        featureFlags: { ...featureFlags, announcements: false },
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await service.replaceFeatureFlags(context(platformOwner, "shared-id"), {
+        tenantId: "tenant-2",
+        featureFlags: { ...featureFlags, zebra_labels: false },
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await service.setAccountStatus(
+        context(unrestrictedTenantAdministrator, "actor-shared-id"),
+        {
+          uid: "user-1",
+          tenantId: "tenant-1",
+          accountStatus: "disabled",
+        },
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      await service.setAccountStatus(
+        context(platformOwner, "actor-shared-id"),
+        {
+          uid: "user-2",
+          tenantId: "tenant-1",
+          accountStatus: "disabled",
+        },
+      ),
+    ).toEqual({ ok: true });
+
+    const audits = [...store.documents.entries()].filter(([path]) =>
+      path.startsWith("provisioningAuditEvents/"),
+    );
+    expect(audits).toHaveLength(4);
+    expect(audits.map(([path]) => path)).not.toContain(
+      "provisioningAuditEvents/shared-id",
+    );
+    expect(audits.map(([, event]) => event)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ requestId: "shared-id" }),
+        expect.objectContaining({ requestId: "actor-shared-id" }),
+      ]),
+    );
+  });
+
+  it("enforces the explicit restricted and unrestricted tenant-admin scopes", async () => {
+    const directoryWithSecondOrganization = {
+      ...tenantDirectory,
+      organizations: [{ id: "organization-1" }, { id: "organization-2" }],
+      facilities: [
+        ...tenantDirectory.facilities,
+        { id: "facility-other", organizationId: "organization-2" },
+      ],
+    };
+    const store = seededStore();
+    store.documents.set(
+      "tenantDirectories/tenant-1",
+      directoryWithSecondOrganization,
+    );
+    const service = createService(store);
+
+    expect(
+      await service.replaceFeatureFlags(
+        context(tenantAdministrator, "restricted-flags"),
+        { tenantId: "tenant-1", featureFlags },
+      ),
+    ).toEqual({ ok: false, code: "forbidden" });
+    expect(
+      await service.replaceFeatureFlags(
+        context(unrestrictedTenantAdministrator, "unrestricted-flags"),
+        { tenantId: "tenant-1", featureFlags },
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      await service.upsertFacility(
+        context(tenantAdministrator, "unauthorized-organization"),
+        {
+          tenantId: "tenant-1",
+          facility: {
+            id: "facility-new-other",
+            organizationId: "organization-2",
+          },
+        },
+      ),
+    ).toEqual({ ok: false, code: "forbidden" });
+    expect(
+      await service.upsertFacility(
+        context(tenantAdministrator, "unauthorized-facility"),
+        {
+          tenantId: "tenant-1",
+          facility: {
+            id: "facility-other",
+            organizationId: "organization-2",
+          },
+        },
+      ),
+    ).toEqual({ ok: false, code: "forbidden" });
+    expect(
+      await service.upsertFacility(
+        context(tenantAdministrator, "create-in-allowed-organization"),
+        {
+          tenantId: "tenant-1",
+          facility: {
+            id: "facility-new",
+            organizationId: "organization-1",
+          },
+        },
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      await service.upsertFacility(
+        context(tenantAdministrator, "new-facility-not-auto-assigned"),
+        {
+          tenantId: "tenant-1",
+          facility: {
+            id: "facility-new",
+            organizationId: "organization-1",
+          },
+        },
+      ),
+    ).toEqual({ ok: false, code: "forbidden" });
+  });
+
+  it("denies every tenant-admin operation when the trusted tenant is inactive", async () => {
+    type Scenario = {
+      name: string;
+      run: (
+        service: ReturnType<typeof createService>,
+        requestId: string,
+      ) => Promise<unknown>;
+    };
+    const scenarios: Scenario[] = [
+      {
+        name: "facility upsert",
+        run: (service, requestId) =>
+          service.upsertFacility(
+            context(unrestrictedTenantAdministrator, requestId),
+            {
+              tenantId: "tenant-1",
+              facility: tenantDirectory.facilities[0],
+            },
+          ),
+      },
+      {
+        name: "profile upsert",
+        run: (service, requestId) =>
+          service.upsertUserProfile(
+            context(unrestrictedTenantAdministrator, requestId),
+            { ...userProfile, uid: "user-2" },
+          ),
+      },
+      {
+        name: "account status",
+        run: (service, requestId) =>
+          service.setAccountStatus(
+            context(unrestrictedTenantAdministrator, requestId),
+            {
+              uid: "user-1",
+              tenantId: "tenant-1",
+              accountStatus: "disabled",
+            },
+          ),
+      },
+      {
+        name: "role assignment",
+        run: (service, requestId) =>
+          service.assignRole(
+            context(unrestrictedTenantAdministrator, requestId),
+            roleAssignment,
+          ),
+      },
+      {
+        name: "role revocation",
+        run: (service, requestId) =>
+          service.revokeRoleAssignment(
+            context(unrestrictedTenantAdministrator, requestId),
+            {
+              uid: "user-1",
+              tenantId: "tenant-1",
+              assignmentId: "assignment-1",
+            },
+          ),
+      },
+      {
+        name: "feature flag replacement",
+        run: (service, requestId) =>
+          service.replaceFeatureFlags(
+            context(unrestrictedTenantAdministrator, requestId),
+            { tenantId: "tenant-1", featureFlags },
+          ),
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const store = seededStore();
+      store.documents.set("tenantDirectories/tenant-1", {
+        ...tenantDirectory,
+        status: "inactive",
+      });
+      store.documents.set(
+        "userRoleAssignments/user-1/assignments/assignment-1",
+        roleAssignment,
+      );
+      const before = new Map(store.documents);
+      const result = await scenario.run(
+        createService(store),
+        `inactive-${scenario.name.replaceAll(" ", "-")}`,
+      );
+
+      expect(result, scenario.name).toEqual({
+        ok: false,
+        code: "forbidden",
+      });
+      expect(store.documents, scenario.name).toEqual(before);
+    }
+  });
+
+  it("keeps platform-owner authority over inactive tenants explicit", async () => {
+    const store = seededStore();
+    store.documents.set("tenantDirectories/tenant-1", {
+      ...tenantDirectory,
+      status: "inactive",
+    });
+    const service = createService(store);
+
+    expect(
+      await service.replaceFeatureFlags(context(platformOwner), {
+        tenantId: "tenant-1",
+        featureFlags: { ...featureFlags, announcements: false },
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("sanitizes audit metadata and excludes secret-bearing fields", () => {
@@ -504,5 +805,47 @@ describe("trusted provisioning service", () => {
       count: 2,
       enabled: true,
     });
+  });
+
+  it("rejects secret-bearing values and keeps audit metadata bounded and deterministic", () => {
+    expect(
+      sanitizeAuditMetadata({
+        ordinary: "ordinary operational note",
+        accessValue: "access_token=abcdefghijklmnop",
+        refreshValue: "refresh token: abcdefghijklmnop",
+        credentialValue: "credentials are abcdefghijklmnop",
+      }),
+    ).toEqual({ ordinary: "ordinary operational note" });
+
+    const metadata = sanitizeAuditMetadata({
+      authText: "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
+      tokenText: "bearer abcdefghijklmnopqrstuvwxyz",
+      keyText: "-----BEGIN PRIVATE KEY----- secret -----END PRIVATE KEY-----",
+      cookieText: "session_token=abcdefghijklmnop",
+      passwordText: "password: do-not-record",
+      nested: { safe: "but nested" },
+      stack: new Error("provider detail"),
+      ...Object.fromEntries(
+        Array.from({ length: 25 }, (_, index) => [
+          `safe${String(index).padStart(2, "0")}`,
+          "x".repeat(200),
+        ]),
+      ),
+    });
+
+    expect(metadata).not.toHaveProperty("authText");
+    expect(metadata).not.toHaveProperty("tokenText");
+    expect(metadata).not.toHaveProperty("keyText");
+    expect(metadata).not.toHaveProperty("cookieText");
+    expect(metadata).not.toHaveProperty("passwordText");
+    expect(metadata).not.toHaveProperty("nested");
+    expect(metadata).not.toHaveProperty("stack");
+    expect(Object.keys(metadata)).toEqual([...Object.keys(metadata)].sort());
+    expect(Object.keys(metadata)).toHaveLength(20);
+    expect(
+      Object.values(metadata).every(
+        (value) => typeof value !== "string" || value.length <= 128,
+      ),
+    ).toBe(true);
   });
 });

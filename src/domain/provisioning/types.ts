@@ -25,6 +25,14 @@ export type AdministratorPrincipal =
     }
   | {
       kind: "tenant_admin";
+      scope: "unrestricted";
+      uid: string;
+      platformId: string;
+      tenantId: string;
+    }
+  | {
+      kind: "tenant_admin";
+      scope: "restricted";
       uid: string;
       platformId: string;
       tenantId: string;

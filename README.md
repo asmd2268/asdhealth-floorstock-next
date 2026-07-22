@@ -90,7 +90,9 @@ Firebase Auth and the trusted one-time Firestore reader initialize only in the b
 
 Trusted identifiers use a canonical printable-ASCII format that rejects whitespace, control/format characters, Unicode lookalikes, and path separators. Validation is bounded to 100 facility memberships, 100 explicit overrides, 250 organizations, 2,000 facilities, and 50 role assignments. Assignment queries fetch at most one overflow sentinel, and both the adapter and domain resolver independently verify UID and tenant boundaries.
 
-Trusted administrative provisioning is exposed only through operation-specific server routes. Firebase bearer identity supplies a UID, while a separately provisioned and validated administrator record supplies platform-owner or tenant-admin authority. Every trusted-data mutation and its sanitized append-only audit event share one Firestore transaction. Browser clients cannot write provisioning or audit records.
+Trusted administrative provisioning is exposed only through operation-specific server routes. Firebase bearer identity supplies a UID, while a separately provisioned and validated administrator record supplies platform-owner or explicitly restricted/unrestricted tenant-admin authority. Tenant administrators require an active matching trusted directory at principal resolution and again in every service transaction. Restricted administrators cannot replace tenant-wide feature flags, and facility creation never silently broadens their assigned facility set.
+
+Every trusted-data mutation, server-ID append-only audit event, and actor-plus-tenant-scoped idempotency marker share one Firestore transaction. The validated client request ID is retained only as correlation data and cannot choose the global audit path or block another actor or tenant. Audit metadata is deterministic and bounded, rejects nested data, and removes secret-bearing keys or values. Browser clients cannot access provisioning principals, audits, or request markers. The checked-in rules and provisioning foundation remain undeployed.
 
 ## Intentionally deferred
 

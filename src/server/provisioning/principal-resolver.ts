@@ -5,6 +5,8 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import type { AdministratorPrincipal } from "@/domain/provisioning/types";
 import { administratorPrincipalSchema } from "@/domain/provisioning/schemas";
+import { isTenantAdministratorAuthorizedForDirectory } from "@/domain/provisioning/authorization";
+import { parseTrustedTenantDirectory } from "@/services/firebase/trusted-session-records";
 
 import { getFirebaseAdminApp } from "../firebase-admin/app";
 
@@ -59,6 +61,23 @@ export function createTrustedAdministratorPrincipalResolver(
         const parsed = administratorPrincipalSchema.safeParse(snapshot.data());
         if (!parsed.success || parsed.data.uid !== identity.uid) {
           return { ok: false, code: "forbidden" };
+        }
+        if (parsed.data.kind === "tenant_admin") {
+          const tenantSnapshot = await firestore
+            .doc("tenantDirectories/" + parsed.data.tenantId)
+            .get();
+          if (!tenantSnapshot.exists) return { ok: false, code: "forbidden" };
+          let tenant: ReturnType<typeof parseTrustedTenantDirectory>;
+          try {
+            tenant = parseTrustedTenantDirectory(tenantSnapshot.data());
+          } catch {
+            return { ok: false, code: "forbidden" };
+          }
+          if (
+            !isTenantAdministratorAuthorizedForDirectory(parsed.data, tenant)
+          ) {
+            return { ok: false, code: "forbidden" };
+          }
         }
         return { ok: true, principal: parsed.data };
       } catch (error) {

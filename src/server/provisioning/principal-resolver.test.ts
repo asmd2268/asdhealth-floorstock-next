@@ -6,6 +6,7 @@ import { createTrustedAdministratorPrincipalResolver } from "./principal-resolve
 
 const principal = {
   kind: "tenant_admin",
+  scope: "restricted",
   uid: "admin-1",
   platformId: "platform-1",
   tenantId: "tenant-1",
@@ -13,9 +14,27 @@ const principal = {
   facilityIds: ["facility-1"],
 } as const;
 
+const tenantDirectory = {
+  tenantId: "tenant-1",
+  status: "active",
+  platformId: "platform-1",
+  organizations: [{ id: "organization-1" }],
+  facilities: [{ id: "facility-1", organizationId: "organization-1" }],
+  featureFlags: {
+    announcements: true,
+    zebra_labels: true,
+    new_request: false,
+    controlled_medicines: false,
+  },
+} as const;
+
 function dependencies(
   document: unknown = principal,
-  options: { disabled?: boolean; fail?: boolean } = {},
+  options: {
+    disabled?: boolean;
+    fail?: boolean;
+    tenantDocument?: unknown;
+  } = {},
 ) {
   const auth = {
     verifyIdToken: options.fail
@@ -30,12 +49,19 @@ function dependencies(
       disabled: options.disabled ?? false,
     }),
   } as unknown as Pick<Auth, "verifyIdToken" | "getUser">;
-  const get = vi.fn().mockResolvedValue({
-    exists: document !== null,
-    data: () => document,
+  const get = vi.fn((path: string) => {
+    const value = path.startsWith("provisioningAdministrators/")
+      ? document
+      : Object.hasOwn(options, "tenantDocument")
+        ? options.tenantDocument
+        : tenantDirectory;
+    return Promise.resolve({
+      exists: value !== null,
+      data: () => value,
+    });
   });
   const firestore = {
-    doc: vi.fn(() => ({ get })),
+    doc: vi.fn((path: string) => ({ get: () => get(path) })),
   } as unknown as Firestore;
   return { auth, firestore, get };
 }
@@ -53,6 +79,48 @@ describe("trusted administrator principal resolution", () => {
       principal,
     });
     expect(auth.verifyIdToken).toHaveBeenCalledWith("token.value", true);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed for a missing, malformed, or inactive tenant directory", async () => {
+    for (const tenantDocument of [
+      null,
+      { tenantId: "tenant-1", status: "active" },
+      { ...tenantDirectory, status: "inactive" },
+      { ...tenantDirectory, tenantId: "tenant-other" },
+      { ...tenantDirectory, platformId: "platform-other" },
+      {
+        ...tenantDirectory,
+        organizations: [{ id: "organization-other" }],
+        facilities: [
+          { id: "facility-other", organizationId: "organization-other" },
+        ],
+      },
+    ]) {
+      const { auth, firestore } = dependencies(principal, { tenantDocument });
+      await expect(
+        createTrustedAdministratorPrincipalResolver(auth, firestore).resolve(
+          "Bearer token.value",
+        ),
+      ).resolves.toEqual({ ok: false, code: "forbidden" });
+    }
+  });
+
+  it("does not require an active tenant directory for platform owners", async () => {
+    const owner = {
+      kind: "platform_owner",
+      uid: "admin-1",
+      platformId: "platform-1",
+    } as const;
+    const { auth, firestore, get } = dependencies(owner, {
+      tenantDocument: null,
+    });
+
+    await expect(
+      createTrustedAdministratorPrincipalResolver(auth, firestore).resolve(
+        "Bearer token.value",
+      ),
+    ).resolves.toEqual({ ok: true, principal: owner });
     expect(get).toHaveBeenCalledOnce();
   });
 

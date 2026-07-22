@@ -72,7 +72,7 @@ const facilitySchema = z
   })
   .strict();
 
-export const administratorPrincipalSchema = z.discriminatedUnion("kind", [
+export const administratorPrincipalSchema = z.union([
   z
     .object({
       kind: z.literal("platform_owner"),
@@ -83,11 +83,22 @@ export const administratorPrincipalSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("tenant_admin"),
+      scope: z.literal("unrestricted"),
+      uid: provisioningIdentifierSchema,
+      platformId: provisioningIdentifierSchema,
+      tenantId: provisioningIdentifierSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("tenant_admin"),
+      scope: z.literal("restricted"),
       uid: provisioningIdentifierSchema,
       platformId: provisioningIdentifierSchema,
       tenantId: provisioningIdentifierSchema,
       organizationIds: z
         .array(provisioningIdentifierSchema)
+        .min(1)
         .max(trustedSessionLimits.tenantOrganizations),
       facilityIds: z
         .array(provisioningIdentifierSchema)
