@@ -103,6 +103,21 @@ beforeEach(async () => {
   );
   await seed("tenantDirectories/" + tenantId, tenant(tenantId));
   await seed("tenantDirectories/" + otherTenantId, tenant(otherTenantId));
+  await seed("provisioningAdministrators/" + activeUid, {
+    kind: "tenant_admin",
+    scope: "restricted",
+    uid: activeUid,
+    tenantId,
+  });
+  await seed("provisioningAuditEvents/existing-event", {
+    action: "create_tenant",
+    actor: activeUid,
+  });
+  await seed("provisioningRequestKeys/existing-key", {
+    actorUid: activeUid,
+    tenantId,
+    requestId: "request-1",
+  });
 });
 
 afterAll(async () => {
@@ -289,6 +304,48 @@ describe("Firestore trusted-session rules", () => {
           status: "inactive",
         }),
       () => deleteDoc(doc(firestore, "tenantDirectories/" + tenantId)),
+    ];
+    for (const operation of operations) {
+      await expectExplicitDenial(operation());
+    }
+  });
+
+  it("denies all browser access to administrator and audit records", async () => {
+    const firestore = firestoreFor(activeUid);
+    const operations = [
+      () => getDoc(doc(firestore, "provisioningAdministrators/" + activeUid)),
+      () =>
+        setDoc(doc(firestore, "provisioningAdministrators/new-admin"), {
+          kind: "platform_owner",
+        }),
+      () =>
+        updateDoc(doc(firestore, "provisioningAdministrators/" + activeUid), {
+          kind: "platform_owner",
+        }),
+      () =>
+        deleteDoc(doc(firestore, "provisioningAdministrators/" + activeUid)),
+      () => getDoc(doc(firestore, "provisioningAuditEvents/existing-event")),
+      () =>
+        setDoc(doc(firestore, "provisioningAuditEvents/new-event"), {
+          action: "assign_role",
+        }),
+      () =>
+        updateDoc(doc(firestore, "provisioningAuditEvents/existing-event"), {
+          action: "revoke_role_assignment",
+        }),
+      () => deleteDoc(doc(firestore, "provisioningAuditEvents/existing-event")),
+      () => getDoc(doc(firestore, "provisioningRequestKeys/existing-key")),
+      () =>
+        setDoc(doc(firestore, "provisioningRequestKeys/new-key"), {
+          actorUid: activeUid,
+          tenantId,
+          requestId: "request-2",
+        }),
+      () =>
+        updateDoc(doc(firestore, "provisioningRequestKeys/existing-key"), {
+          requestId: "request-3",
+        }),
+      () => deleteDoc(doc(firestore, "provisioningRequestKeys/existing-key")),
     ];
     for (const operation of operations) {
       await expectExplicitDenial(operation());

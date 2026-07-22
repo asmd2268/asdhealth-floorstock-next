@@ -36,6 +36,18 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
+    match /provisioningAdministrators/{uid} {
+      allow read, write: if false;
+    }
+
+    match /provisioningAuditEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /provisioningRequestKeys/{namespaceId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
