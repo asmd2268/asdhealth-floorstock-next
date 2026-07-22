@@ -22,6 +22,7 @@ describe("trusted Firestore reader", () => {
         { field: "uid", value: "user-1" },
         { field: "tenantId", value: "tenant-1" },
       ],
+      51,
     );
 
     expect(sdk.getFirestore).toHaveBeenCalledOnce();
@@ -36,6 +37,7 @@ describe("trusted Firestore reader", () => {
         { field: "uid", value: "user-1" },
         { field: "tenantId", value: "tenant-1" },
       ],
+      51,
     );
   });
 });

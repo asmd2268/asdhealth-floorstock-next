@@ -14,6 +14,7 @@ import {
   parseTrustedTenantDirectory,
   parseTrustedUserProfile,
 } from "./trusted-session-records";
+import { trustedSessionLimits } from "./trusted-session-limits";
 
 export interface TrustedSessionRepositoryAdapters {
   userProfiles: UserProfileRepository;
@@ -48,11 +49,18 @@ export function createTrustedSessionRepositoryAdapters(
             { field: "uid", value: uid },
             { field: "tenantId", value: tenantId },
           ],
+          trustedSessionLimits.roleAssignments + 1,
         );
+        if (documents.length > trustedSessionLimits.roleAssignments) {
+          throw new Error("Trusted role assignment limit exceeded.");
+        }
         return documents.map((document) => {
           const assignment = parseTrustedRoleAssignment(document);
           if (assignment.uid !== uid) {
             throw new Error("Trusted role assignment identity mismatch.");
+          }
+          if (assignment.tenantId !== tenantId) {
+            throw new Error("Trusted role assignment tenant mismatch.");
           }
           return assignment;
         });

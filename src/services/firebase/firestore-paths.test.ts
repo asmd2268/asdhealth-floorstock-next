@@ -19,12 +19,22 @@ describe("trusted session Firestore paths", () => {
     ]);
   });
 
-  it.each(["", "../tenant-2", " tenant-1", "tenant-1 ", ".", ".."])(
-    "rejects unsafe document identifier %j",
-    (identifier) => {
-      expect(() => trustedSessionPaths.userProfile(identifier)).toThrow(
-        "Invalid trusted-session document identifier",
-      );
-    },
-  );
+  it.each([
+    "",
+    "../tenant-2",
+    "tenant\\path",
+    " tenant-1",
+    "tenant-1 ",
+    ".",
+    "..",
+    "tenant\u0000one",
+    "tenant\none",
+    "tenant\u200Bone",
+    "tenant／one",
+    "مستأجر-1",
+  ])("rejects unsafe document identifier %j", (identifier) => {
+    expect(() => trustedSessionPaths.userProfile(identifier)).toThrow(
+      "Invalid trusted-session document identifier",
+    );
+  });
 });

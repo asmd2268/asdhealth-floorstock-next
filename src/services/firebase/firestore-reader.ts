@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  limit,
   query,
   where,
   type Firestore,
@@ -16,6 +17,7 @@ export interface TrustedFirestoreReader {
   listDocuments(
     path: readonly [string, string, string],
     constraints: readonly FirestoreEqualityConstraint[],
+    maxResults: number,
   ): Promise<readonly unknown[]>;
 }
 
@@ -34,6 +36,7 @@ export interface FirestoreReaderSdk {
     firestore: unknown,
     path: readonly [string, string, string],
     constraints: readonly FirestoreEqualityConstraint[],
+    maxResults: number,
   ): Promise<readonly unknown[]>;
 }
 
@@ -43,7 +46,7 @@ const firebaseFirestoreSdk: FirestoreReaderSdk = {
     const snapshot = await getDoc(doc(firestore as Firestore, ...path));
     return snapshot.exists() ? snapshot.data() : null;
   },
-  async listDocuments(firestore, path, constraints) {
+  async listDocuments(firestore, path, constraints, maxResults) {
     const reference = collection(firestore as Firestore, ...path);
     const snapshot = await getDocs(
       query(
@@ -51,6 +54,7 @@ const firebaseFirestoreSdk: FirestoreReaderSdk = {
         ...constraints.map((constraint) =>
           where(constraint.field, "==", constraint.value),
         ),
+        limit(maxResults),
       ),
     );
     return snapshot.docs.map((document) => document.data());
@@ -68,8 +72,8 @@ export function createTrustedFirestoreReader(
 
   return {
     getDocument: (path) => sdk.getDocument(resolveFirestore(), path),
-    listDocuments: (path, constraints) =>
-      sdk.listDocuments(resolveFirestore(), path, constraints),
+    listDocuments: (path, constraints, maxResults) =>
+      sdk.listDocuments(resolveFirestore(), path, constraints, maxResults),
   };
 }
 

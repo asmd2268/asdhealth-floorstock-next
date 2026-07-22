@@ -8,17 +8,16 @@ import {
   type UserProfileRecord,
 } from "@/domain/auth/types";
 
+import { isCanonicalTrustedIdentifier } from "./trusted-identifier";
+import { trustedSessionLimits } from "./trusted-session-limits";
+
 const trustedId = z
   .string()
   .min(1)
-  .max(128)
+  .max(trustedSessionLimits.identifierLength)
   .refine(
-    (value) =>
-      value === value.trim() &&
-      value !== "." &&
-      value !== ".." &&
-      !value.includes("/"),
-    "Expected a valid trusted record identifier.",
+    isCanonicalTrustedIdentifier,
+    "Expected a canonical trusted record identifier.",
   );
 
 const platformScope = z
@@ -65,10 +64,15 @@ const userProfileSchema = z
     uid: trustedId,
     tenantId: trustedId,
     organizationId: trustedId.nullable(),
-    facilityIds: z.array(trustedId).min(1),
+    facilityIds: z
+      .array(trustedId)
+      .min(1)
+      .max(trustedSessionLimits.facilityMemberships),
     activeFacilityId: trustedId.nullable(),
     accountStatus: z.enum(accountStatuses),
-    explicitPermissionOverrides: z.array(permissionOverride),
+    explicitPermissionOverrides: z
+      .array(permissionOverride)
+      .max(trustedSessionLimits.explicitPermissionOverrides),
   })
   .strict()
   .superRefine((profile, context) => {
@@ -104,7 +108,10 @@ const tenantDirectorySchema = z
     tenantId: trustedId,
     status: z.enum(["active", "inactive"]),
     platformId: trustedId,
-    organizations: z.array(z.object({ id: trustedId }).strict()).min(1),
+    organizations: z
+      .array(z.object({ id: trustedId }).strict())
+      .min(1)
+      .max(trustedSessionLimits.tenantOrganizations),
     facilities: z
       .array(
         z
@@ -114,7 +121,8 @@ const tenantDirectorySchema = z
           })
           .strict(),
       )
-      .min(1),
+      .min(1)
+      .max(trustedSessionLimits.tenantFacilities),
     featureFlags: featureFlagsSchema,
   })
   .strict()

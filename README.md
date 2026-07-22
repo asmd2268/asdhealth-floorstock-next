@@ -86,10 +86,12 @@ Firebase validation rejects example placeholders and malformed project, domain, 
 
 Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts reads to the caller’s own active identity and tenant, and defaults all unspecified access to deny. These rules are a checked-in foundation and are not deployed by this work. No Admin credentials are included.
 
+Trusted identifiers use a canonical printable-ASCII format that rejects whitespace, control/format characters, Unicode lookalikes, and path separators. Validation is bounded to 100 facility memberships, 100 explicit overrides, 250 organizations, 2,000 facilities, and 50 role assignments. Assignment queries fetch at most one overflow sentinel, and both the adapter and domain resolver independently verify UID and tenant boundaries.
+
 ## Intentionally deferred
 
 - Trusted administrative provisioning tooling for profiles, assignments, tenants, facilities, and feature flags
-- Firestore rules deployment and emulator/integration validation against a real project configuration
+- Firestore rules deployment and integration validation against a real project configuration
 - Server-verified session transport for protected APIs and routes
 - Password reset, registration, multi-factor authentication, and account recovery
 - Facility selection and switching UI
@@ -105,12 +107,15 @@ npm run lint
 npm run typecheck
 npm run test
 npm run test:run
+npm run test:rules
 npm run format
 npm run format:check
 npm run build
 ```
 
 `npm run test` starts Vitest in watch mode; `npm run test:run` performs a single CI-style run.
+
+The dedicated rules command starts only the local Firestore emulator for the fixed demo-asdhealth-floorstock-rules project. It never addresses a production Firebase project, and the checked-in rules remain undeployed.
 
 ## Local-only legacy reference
 

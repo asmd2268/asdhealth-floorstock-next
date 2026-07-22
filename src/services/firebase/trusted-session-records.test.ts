@@ -5,6 +5,7 @@ import {
   parseTrustedTenantDirectory,
   parseTrustedUserProfile,
 } from "./trusted-session-records";
+import { trustedSessionLimits } from "./trusted-session-limits";
 
 export const validProfileDocument = {
   uid: "user-1",
@@ -69,6 +70,37 @@ describe("trusted session record validation", () => {
     expect(() => parseTrustedUserProfile(document)).toThrow();
   });
 
+  it("enforces bounded profile collections", () => {
+    const facilityIds = Array.from(
+      { length: trustedSessionLimits.facilityMemberships + 1 },
+      (_, index) => "facility-" + index,
+    );
+    const explicitPermissionOverrides = Array.from(
+      { length: trustedSessionLimits.explicitPermissionOverrides + 1 },
+      () => ({
+        effect: "allow" as const,
+        resource: "dashboard" as const,
+        action: "read" as const,
+        scope: {
+          kind: "facility" as const,
+          platformId: "platform-1",
+          organizationId: "organization-1",
+          facilityId: "facility-1",
+        },
+      }),
+    );
+
+    expect(() =>
+      parseTrustedUserProfile({ ...validProfileDocument, facilityIds }),
+    ).toThrow();
+    expect(() =>
+      parseTrustedUserProfile({
+        ...validProfileDocument,
+        explicitPermissionOverrides,
+      }),
+    ).toThrow();
+  });
+
   it("normalizes a valid scoped role assignment", () => {
     expect(parseTrustedRoleAssignment(validAssignmentDocument)).toEqual(
       validAssignmentDocument,
@@ -85,6 +117,22 @@ describe("trusted session record validation", () => {
     { ...validAssignmentDocument, claims: { role: "master" } },
   ])("rejects unknown or malformed role assignment data", (document) => {
     expect(() => parseTrustedRoleAssignment(document)).toThrow();
+  });
+
+  it.each([
+    " tenant-1",
+    "tenant-1 ",
+    "tenant/path",
+    "tenant\\path",
+    "tenant\u0000one",
+    "tenant\none",
+    "tenant\u200Bone",
+    "tenant／one",
+    "مستأجر-1",
+  ])("rejects non-canonical trusted identifier %j", (tenantId) => {
+    expect(() =>
+      parseTrustedRoleAssignment({ ...validAssignmentDocument, tenantId }),
+    ).toThrow();
   });
 
   it("normalizes a complete tenant directory", () => {
@@ -127,5 +175,29 @@ describe("trusted session record validation", () => {
     },
   ])("rejects malformed tenant or feature-flag data", (document) => {
     expect(() => parseTrustedTenantDirectory(document)).toThrow();
+  });
+
+  it("enforces bounded tenant directory collections", () => {
+    const organizations = Array.from(
+      { length: trustedSessionLimits.tenantOrganizations + 1 },
+      (_, index) => ({ id: "organization-" + index }),
+    );
+    const facilities = Array.from(
+      { length: trustedSessionLimits.tenantFacilities + 1 },
+      (_, index) => ({
+        id: "facility-" + index,
+        organizationId: "organization-1",
+      }),
+    );
+
+    expect(() =>
+      parseTrustedTenantDirectory({
+        ...validTenantDocument,
+        organizations,
+      }),
+    ).toThrow();
+    expect(() =>
+      parseTrustedTenantDirectory({ ...validTenantDocument, facilities }),
+    ).toThrow();
   });
 });

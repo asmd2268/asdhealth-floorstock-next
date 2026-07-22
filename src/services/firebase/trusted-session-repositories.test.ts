@@ -4,6 +4,7 @@ import { createIdentitySessionResolutionService } from "@/services/auth/session-
 
 import type { TrustedFirestoreReader } from "./firestore-reader";
 import { createTrustedSessionRepositoryAdapters } from "./trusted-session-repositories";
+import { trustedSessionLimits } from "./trusted-session-limits";
 
 const identity = {
   uid: "user-1",
@@ -101,6 +102,7 @@ describe("trusted Firestore session repositories", () => {
         { field: "uid", value: identity.uid },
         { field: "tenantId", value: "tenant-1" },
       ],
+      trustedSessionLimits.roleAssignments + 1,
     );
     expect(firestore.getDocument).toHaveBeenNthCalledWith(2, [
       "tenantDirectories",
@@ -117,7 +119,7 @@ describe("trusted Firestore session repositories", () => {
     ).resolves.toBeNull();
   });
 
-  it("rejects profile and assignment UID mismatches", async () => {
+  it("rejects profile and assignment UID mismatches at the repository boundary", async () => {
     const mismatchedProfile = createTrustedSessionRepositoryAdapters(
       reader({ profile: { ...validProfile, uid: "other-user" } }),
     );
@@ -131,6 +133,32 @@ describe("trusted Firestore session repositories", () => {
     await expect(
       mismatchedAssignment.roleAssignments.listByUid(identity.uid, "tenant-1"),
     ).rejects.toThrow("identity mismatch");
+  });
+
+  it("rejects an assignment tenant mismatch at the repository boundary", async () => {
+    const repositories = createTrustedSessionRepositoryAdapters(
+      reader({
+        assignments: [{ ...validAssignment, tenantId: "tenant-malicious" }],
+      }),
+    );
+
+    await expect(
+      repositories.roleAssignments.listByUid(identity.uid, "tenant-1"),
+    ).rejects.toThrow("tenant mismatch");
+  });
+
+  it("fails closed when the role assignment limit is exceeded", async () => {
+    const assignments = Array.from(
+      { length: trustedSessionLimits.roleAssignments + 1 },
+      () => validAssignment,
+    );
+    const repositories = createTrustedSessionRepositoryAdapters(
+      reader({ assignments }),
+    );
+
+    await expect(
+      repositories.roleAssignments.listByUid(identity.uid, "tenant-1"),
+    ).rejects.toThrow("limit exceeded");
   });
 
   it("rejects a tenant document ID mismatch", async () => {
@@ -177,7 +205,7 @@ describe("trusted Firestore session repositories", () => {
     [
       "assignment tenant mismatch",
       { assignments: [{ ...validAssignment, tenantId: "tenant-2" }] },
-      "role_assignment_mismatch",
+      "provider_unavailable",
     ],
     [
       "invalid facility membership",
