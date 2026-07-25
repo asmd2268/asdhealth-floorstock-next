@@ -6,6 +6,7 @@ import type {
   FeatureFlagSet,
 } from "@/domain/platform/types";
 import { getDictionary, type Locale } from "@/i18n/dictionaries";
+import { getVisibleNavigation } from "@/navigation/navigation";
 import type { SignOutService } from "@/services/contracts/auth";
 
 import { PresentationalShell } from "./presentational-shell";
@@ -28,16 +29,22 @@ export function AppShell({
 }: AppShellProps) {
   const { locale, changeLocale } = useShellLocale(initialLocale);
   const dictionary = getDictionary(locale);
+  const navigation = getVisibleNavigation({
+    roleAssignments: authenticatedUser.roleAssignments,
+    subjectScope: authenticatedUser.activeScope,
+    targetScope: authenticatedUser.activeScope,
+    featureFlags,
+    overrides: authenticatedUser.explicitPermissionOverrides,
+  });
 
   return (
     <PresentationalShell
-      authenticatedUser={authenticatedUser}
+      activeFacilityId={authenticatedUser.activeFacilityId}
       branding={branding}
       contextLabel={dictionary.shell.authenticatedSession}
-      featureFlags={featureFlags}
+      navigation={navigation}
       locale={locale}
       onLocaleChange={changeLocale}
-      roleAssignments={authenticatedUser.roleAssignments}
       signOut={signOut}
     />
   );

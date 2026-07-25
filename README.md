@@ -15,8 +15,9 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/i18n` contains the English and Arabic dictionaries, locale types, and direction mapping. UI components consume dictionary values rather than embedding user-facing strings.
 - `src/navigation` declares permission metadata and canonical targets once, then resolves every navigation item through the permission engine.
 - `src/services/contracts` defines framework-independent authentication-provider, user-profile, role-assignment, tenant-directory, session, sign-in, sign-out, and Firestore boundaries without business collections.
-- `src/services/auth` composes provider identity with trusted session resolution and coordinates auth-state changes without mixing authentication with authorization.
+- `src/services/auth` exchanges browser identity for an opaque server session and coordinates auth-state changes without treating browser state as authorization.
 - `src/services/firebase` validates public browser configuration with Zod, lazily initializes one named browser app plus singleton Auth and Firestore boundaries, adapts Firebase identities, and validates trusted session documents before returning application-owned types.
+- `src/server/session` is physically server-only and verifies Firebase ID tokens, reads validated trusted records through Admin adapters, stores opaque revocable sessions, enforces CSRF/origin checks, and re-runs permission checks for protected operations.
 
 The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md.
 
@@ -30,9 +31,11 @@ The session resolver treats provider identity as proof of identity only. Tenant 
 
 Role assignments remain scoped and are evaluated centrally for each permission target. Explicit deny overrides explicit allow, and navigation visibility is only a presentation result of authorization—it is never an authorization source. Trusted authorization state is not stored in local storage.
 
-The browser Firebase Authentication adapter supports current identity resolution, auth-state subscription, email/password sign-in, and sign-out. Firebase identity proves identity only: the application does not read custom claims or derive tenant, facility, role, permission, account status, or feature flags from the client SDK. Raw Firebase errors are normalized before reaching UI code, and credential failures use one generic message to avoid account enumeration.
+The browser Firebase Authentication adapter supports current identity resolution, auth-state subscription, email/password sign-in, force-refreshed ID-token retrieval, and sign-out. Firebase identity proves identity only: the application does not read custom claims or derive tenant, facility, role, permission, account status, or feature flags from the client SDK. Raw Firebase errors are normalized before reaching UI code, and credential failures use one generic message to avoid account enumeration.
 
-Production starts in a loading state while Firebase resolves. Signed-out identity becomes unauthenticated; signed-in identity is used only to read its own validated profile and role-assignment path. The resulting profile tenant selects one validated tenant directory. Authentication succeeds only after the existing domain resolver verifies account and tenant status, facility relationships, scoped roles, explicit overrides, and the complete feature-flag set. Missing, malformed, mismatched, inactive, or unavailable repository data fails closed.
+Production starts in a loading state while Firebase resolves. Signed-out identity becomes unauthenticated; a signed-in browser exchanges only a freshly issued Firebase ID token at `/api/auth/session`. Firebase Admin verifies that token and server-only repositories load the UID profile, its matching role assignments, and the profile-selected tenant directory. Authentication succeeds only after the existing domain resolver verifies account and tenant status, facility relationships, scoped roles, explicit overrides, and the complete feature-flag set. Missing, malformed, mismatched, inactive, revoked, expired, or unavailable data fails closed.
+
+The browser receives an opaque `HttpOnly`, strict same-site session cookie, not trusted authorization state. In production it uses a `__Host-` cookie with `Secure`; local HTTP development uses a separate non-Secure cookie name. The cookie has an explicit eight-hour expiry and can be revoked. Duplicate, malformed, ambiguous, and oversized cookie headers fail closed. Every protected page and API request reloads trusted authorization records, so disabled accounts and role or feature changes take effect without waiting for cookie expiry. Production UI receives only sanitized branding and facility display context plus server-filtered navigation targets; roles, overrides, permission metadata, feature flags, and trusted records are not serialized to it. Protected APIs independently declare and re-check their required permission. Details and the threat model are in `docs/server-session-security.md`.
 
 ## Roles
 
@@ -49,7 +52,7 @@ The canonical role identifiers are:
 
 The role switcher is for local development/demo use only. Demo identity, demo feature flags, and the switcher require both a recognized non-production runtime and `NEXT_PUBLIC_ENABLE_DEMO_ROLE_SWITCHER=true`. Production always disables the demo path even if the public flag is accidentally enabled. Missing or malformed runtime and flag values fail closed. The same server-derived gate selects the demo session and demo-only shell; the production `AppShell` has no client prop that can enable role substitution.
 
-Production and demo shell entry points are physically separate. `AppShell` always forwards the authenticated user’s resolved role assignments and authenticated-session label. `DemoAppShell` alone imports role identifiers, owns the selected demo role, and constructs substituted assignments. Both render through a neutral presentational shell that receives already-resolved assignments and controls, and the server loads the demo component only after the trusted demo gate succeeds.
+Production and demo shell entry points are physically separate. The server-protected production page resolves navigation before serialization and sends the neutral shell only sanitized facility context and visible navigation declarations. `DemoAppShell` alone imports role identifiers, owns the selected demo role, and constructs substituted assignments before resolving its demo navigation. The presentational shell has no role-substitution or authorization logic, and the server loads the demo component only after the trusted demo gate succeeds.
 
 ## Permission model
 
@@ -84,6 +87,8 @@ cp .env.example .env.local
 
 Fill in the six `NEXT_PUBLIC_FIREBASE_*` values for a non-production Firebase web app when Firebase initialization is needed. These values are validated at the browser service boundary. Do not place service-account credentials, admin keys, or other secrets in `NEXT_PUBLIC_*` variables.
 
+Server-session routes additionally require `SERVER_SESSION_ALLOWED_ORIGIN` to be the exact browser origin. HTTPS is mandatory outside `localhost` and `127.0.0.1`; missing, placeholder, path-bearing, or malformed values fail closed. Firebase Admin values remain server-only.
+
 Firebase validation rejects example placeholders and malformed project, domain, bucket, sender, and app identifiers. Browser initialization uses a named Firebase app and refuses to reuse it if its configuration differs.
 
 Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts reads to the caller’s own active identity and tenant, and defaults all unspecified access to deny. These rules are a checked-in foundation and are not deployed by this work. No Admin credentials are included.
@@ -98,8 +103,8 @@ Every trusted-data mutation, server-ID append-only audit event, and actor-plus-t
 
 - General administration UI and administrator-principal provisioning tooling
 - Firestore rules deployment and integration validation against a real project configuration
-- Server-verified session transport for protected APIs and routes
 - Password reset, registration, multi-factor authentication, and account recovery
+- Production session retention cleanup, global session-management UI, rate limiting, and monitoring
 - Facility selection and switching UI
 - Production Firebase configuration or deployment
 - Stock, controlled-medicine, and business collection workflows

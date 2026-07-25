@@ -31,6 +31,7 @@ function setup(currentUser: FirebaseUserLike | null = user) {
     }),
     signInWithEmailAndPassword: vi.fn().mockResolvedValue({ user }),
     signOut: vi.fn().mockResolvedValue(undefined),
+    getIdToken: vi.fn().mockResolvedValue("fresh-id-token"),
   };
 
   return {
@@ -140,6 +141,15 @@ describe("Firebase authentication adapter", () => {
     const result = await failure.provider.signOut();
     expect(result).toEqual({ ok: false, reason: "provider_unavailable" });
     expect(JSON.stringify(result)).not.toContain("raw Firebase details");
+  });
+
+  it("retrieves a force-refreshed ID token without adding authorization data", async () => {
+    const { provider, sdk } = setup();
+    await expect(provider.getIdentityToken()).resolves.toEqual({
+      ok: true,
+      token: "fresh-id-token",
+    });
+    expect(sdk.getIdToken).toHaveBeenCalledWith(user);
   });
 
   it("fails closed when Firebase initialization throws and initializes once", async () => {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { roleIds, type RoleId } from "@/domain/access/types";
 import { getDictionary } from "@/i18n/dictionaries";
+import { getVisibleNavigation } from "@/navigation/navigation";
 
 import type { AppShellProps } from "./app-shell";
 import { PresentationalShell } from "./presentational-shell";
@@ -25,6 +26,13 @@ export function DemoAppShell({
     () => [{ role: demoRole, scope: authenticatedUser.activeScope }],
     [authenticatedUser.activeScope, demoRole],
   );
+  const navigation = getVisibleNavigation({
+    roleAssignments,
+    subjectScope: authenticatedUser.activeScope,
+    targetScope: authenticatedUser.activeScope,
+    featureFlags,
+    overrides: authenticatedUser.explicitPermissionOverrides,
+  });
 
   const roleSelector = (
     <label className="control-field">
@@ -45,13 +53,12 @@ export function DemoAppShell({
   return (
     <PresentationalShell
       additionalControls={roleSelector}
-      authenticatedUser={authenticatedUser}
+      activeFacilityId={authenticatedUser.activeFacilityId}
       branding={branding}
       contextLabel={dictionary.shell.demoMode}
-      featureFlags={featureFlags}
+      navigation={navigation}
       locale={locale}
       onLocaleChange={changeLocale}
-      roleAssignments={roleAssignments}
     />
   );
 }

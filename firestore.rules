@@ -48,6 +48,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Opaque authentication sessions are readable and writable only by the
+    // server-side Admin adapter. They never contain tenant authorization data.
+    match /serverSessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+    match /sessionTokenExchanges/{tokenFingerprint} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

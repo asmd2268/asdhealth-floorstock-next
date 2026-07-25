@@ -31,4 +31,63 @@ describe("Firebase Admin client boundary", () => {
       }
     }
   });
+
+  it("keeps server environment names, session internals, and secrets out of client modules", () => {
+    const clientFiles = sourceFiles(join(process.cwd(), "src")).filter((file) =>
+      /^['\"]use client['\"];/m.test(readFileSync(file, "utf8")),
+    );
+    for (const file of clientFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(
+        /FIREBASE_ADMIN_|SERVER_SESSION_ALLOWED_ORIGIN|PRIVATE_KEY|credentialHash|@\/server\//,
+      );
+    }
+  });
+
+  it("uses server repositories for production sessions and does not import browser authorization adapters", () => {
+    const productionClient = readFileSync(
+      join(process.cwd(), "src/services/auth/firebase-client.ts"),
+      "utf8",
+    );
+    const serverComposition = readFileSync(
+      join(process.cwd(), "src/server/session/composition.ts"),
+      "utf8",
+    );
+    expect(productionClient).not.toContain("trusted-session-repositories");
+    expect(productionClient).not.toContain(
+      "createIdentitySessionResolutionService",
+    );
+    expect(serverComposition).toContain("getServerTrustedRepositoryAdapters");
+    expect(serverComposition).toContain(
+      "createIdentitySessionResolutionService",
+    );
+  });
+
+  it("does not serialize trusted authorization inputs through the production shell", () => {
+    const productionShell = readFileSync(
+      join(process.cwd(), "src/components/server-authenticated-app.tsx"),
+      "utf8",
+    );
+    expect(productionShell).not.toMatch(
+      /AuthenticatedUser|FeatureFlagSet|roleAssignments|explicitPermissionOverrides/,
+    );
+    expect(productionShell).toContain("readonly ShellNavigationItem[]");
+    expect(productionShell).not.toMatch(
+      /branding:\s*BrandingConfiguration|import type \{ BrandingConfiguration \}/,
+    );
+    const protectedPage = readFileSync(
+      join(process.cwd(), "src/app/app/page.tsx"),
+      "utf8",
+    );
+    expect(protectedPage).toContain(
+      ".map(({ id, targetId, href }) => ({ id, targetId, href }))",
+    );
+    expect(protectedPage).not.toContain("branding={baseBrand}");
+    expect(protectedPage).toContain("getServerSessionService().authorize");
+    const publicPage = readFileSync(
+      join(process.cwd(), "src/app/page.tsx"),
+      "utf8",
+    );
+    expect(publicPage).toContain("getServerSessionService().authorize");
+  });
 });

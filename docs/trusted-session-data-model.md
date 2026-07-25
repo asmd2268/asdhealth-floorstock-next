@@ -70,7 +70,13 @@ At most 50 role assignments are accepted. The Firestore query is bounded to 51 r
 - Browser clients cannot write any trusted authorization record, including their own.
 - All unspecified reads and all browser writes are denied.
 
-The rules do not grant access to inventory or other business collections. Deploying and testing these rules against a real Firebase project is intentionally deferred.
+### `serverSessions/{sessionId}`
+
+Opaque server sessions are a separate Admin-only transport record. They contain a Firebase UID, random credential hash, bounded timestamps, and revocation state—but never tenant, facility, role, permission, override, or feature-flag data. Browser reads, lists, creates, updates, and deletes are all denied. See `docs/server-session-security.md` for the record and request-boundary details.
+
+`sessionTokenExchanges/{domainSeparatedSha256(idToken)}` is an Admin-only, non-secret replay marker created atomically with a session. Browser access is denied. It contains the resulting session ID and expiry but never the source token or authorization data. Its digest domain differs from the opaque session-secret digest domain.
+
+The rules do not grant access to server sessions, inventory, or other business collections. Deploying and testing these rules against a real Firebase project is intentionally deferred.
 
 ## Local rules emulator
 

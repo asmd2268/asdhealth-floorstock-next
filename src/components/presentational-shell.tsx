@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -11,18 +10,9 @@ import {
 } from "react";
 
 import { getSafeLogoUrl } from "@/config/platform";
-import type { ScopedRoleAssignment } from "@/domain/access/types";
-import type { AuthenticatedUser } from "@/domain/auth/types";
-import type {
-  BrandingConfiguration,
-  FeatureFlagSet,
-} from "@/domain/platform/types";
+import type { BrandingConfiguration } from "@/domain/platform/types";
 import { getDictionary, getDirection, type Locale } from "@/i18n/dictionaries";
-import {
-  getVisibleNavigation,
-  type NavigationItem,
-  type NavigationItemId,
-} from "@/navigation/navigation";
+import type { NavigationItemId } from "@/navigation/navigation";
 import type { SignOutService } from "@/services/contracts/auth";
 
 import {
@@ -65,11 +55,26 @@ const moduleDescriptions = {
   controlled_medicines: "controlledMedicinesDescription",
 } as const;
 
-type ModuleNavigationItem = NavigationItem & {
+export type ShellBrandingConfiguration = Pick<
+  BrandingConfiguration,
+  | "productName"
+  | "clientDisplayName"
+  | "ownerText"
+  | "logoUrl"
+  | "primaryAccentToken"
+>;
+
+export interface ShellNavigationItem {
+  id: NavigationItemId;
+  targetId: string;
+  href: `#${string}`;
+}
+
+type ModuleNavigationItem = ShellNavigationItem & {
   id: Exclude<NavigationItemId, "dashboard">;
 };
 
-function isModuleItem(item: NavigationItem): item is ModuleNavigationItem {
+function isModuleItem(item: ShellNavigationItem): item is ModuleNavigationItem {
   return item.id !== "dashboard";
 }
 
@@ -96,26 +101,24 @@ function useMobileViewport(): boolean {
 }
 
 export interface PresentationalShellProps {
-  authenticatedUser: AuthenticatedUser;
-  branding: BrandingConfiguration;
+  activeFacilityId: string;
+  branding: ShellBrandingConfiguration;
   contextLabel: string;
-  featureFlags: FeatureFlagSet;
+  navigation: readonly ShellNavigationItem[];
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
-  roleAssignments: readonly ScopedRoleAssignment[];
   signOut?: SignOutService["signOut"];
   additionalControls?: ReactNode;
 }
 
 export function PresentationalShell({
   additionalControls,
-  authenticatedUser,
+  activeFacilityId,
   branding,
   contextLabel,
-  featureFlags,
+  navigation,
   locale,
   onLocaleChange,
-  roleAssignments,
   signOut,
 }: PresentationalShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -153,22 +156,6 @@ export function PresentationalShell({
     };
   }, [isMobile, sidebarOpen]);
 
-  const navigation = useMemo(
-    () =>
-      getVisibleNavigation({
-        roleAssignments,
-        subjectScope: authenticatedUser.activeScope,
-        targetScope: authenticatedUser.activeScope,
-        featureFlags,
-        overrides: authenticatedUser.explicitPermissionOverrides,
-      }),
-    [
-      authenticatedUser.activeScope,
-      authenticatedUser.explicitPermissionOverrides,
-      featureFlags,
-      roleAssignments,
-    ],
-  );
   const modules = navigation.filter(isModuleItem);
   const shellStyle = {
     "--accent": branding.primaryAccentToken,
@@ -233,7 +220,7 @@ export function PresentationalShell({
           <BuildingIcon />
           <span>
             <small>{dictionary.shell.facilityContext}</small>
-            <strong>{authenticatedUser.activeFacilityId}</strong>
+            <strong>{activeFacilityId}</strong>
           </span>
         </div>
 
