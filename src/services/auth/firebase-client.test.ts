@@ -4,20 +4,27 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ProviderIdentity } from "@/domain/auth/types";
 import type { AuthenticationProvider } from "@/services/contracts/auth";
-import type { TrustedSessionRepositoryAdapters } from "@/services/firebase/trusted-session-repositories";
+import type {
+  BrowserServerSessionTransport,
+  IdentityTokenProvider,
+} from "@/services/contracts/server-session";
 
 import { createProductionFirebaseAuthenticationController } from "./firebase-client";
 
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe("production Firebase session composition", () => {
-  it("uses trusted repositories and ignores browser authorization state", async () => {
+  it("sends only the provider token to the server transport and ignores browser authorization state", async () => {
     let emitIdentity: ((identity: ProviderIdentity | null) => void) | undefined;
-    const provider: AuthenticationProvider = {
+    const provider: AuthenticationProvider & IdentityTokenProvider = {
       getIdentity: vi.fn().mockResolvedValue({ ok: true, identity: null }),
+      getIdentityToken: vi
+        .fn()
+        .mockResolvedValue({ ok: true, token: "id-token" }),
       subscribe: vi.fn((listener) => {
         emitIdentity = listener;
         return vi.fn();
@@ -25,36 +32,31 @@ describe("production Firebase session composition", () => {
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
-    const getByUid = vi.fn().mockResolvedValue(null);
-    const repositories: TrustedSessionRepositoryAdapters = {
-      userProfiles: { getByUid },
-      roleAssignments: { listByUid: vi.fn().mockResolvedValue([]) },
-      tenantDirectories: { getByTenantId: vi.fn().mockResolvedValue(null) },
+    const transport: BrowserServerSessionTransport = {
+      create: vi.fn().mockResolvedValue({ ok: true }),
+      revoke: vi.fn(),
     };
+    const established = vi.fn();
     localStorage.setItem("role", "master");
     localStorage.setItem("tenantId", "attacker-tenant");
 
-    const listener = vi.fn();
     createProductionFirebaseAuthenticationController(
       provider,
-      repositories,
-    ).start(listener);
+      transport,
+      established,
+    ).start(vi.fn());
     emitIdentity?.({
       uid: "firebase-user-1",
       email: "user@example.com",
       displayName: "Example User",
-      customClaims: { role: "master", tenantId: "attacker-tenant" },
-    } as ProviderIdentity);
+    });
     await flushPromises();
 
-    expect(getByUid).toHaveBeenCalledWith("firebase-user-1");
-    expect(listener).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        authenticationState: {
-          status: "error",
-          failure: { category: "access_denied", reason: "profile_not_found" },
-        },
-      }),
+    expect(provider.getIdentityToken).toHaveBeenCalledOnce();
+    expect(transport.create).toHaveBeenCalledWith("id-token");
+    expect(transport.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ role: "master" }),
     );
+    expect(established).toHaveBeenCalledOnce();
   });
 });

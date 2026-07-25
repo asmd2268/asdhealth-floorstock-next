@@ -1,22 +1,24 @@
-import { createAuthenticationClientController } from "@/services/auth/client-controller";
-import { createIdentitySessionResolutionService } from "@/services/auth/session-service";
+import { createServerSessionAuthenticationController } from "@/services/auth/server-session-controller";
+import { getBrowserServerSessionTransport } from "@/services/auth/server-session-transport";
 import type {
   AuthenticationClientController,
   AuthenticationProvider,
 } from "@/services/contracts/auth";
+import type {
+  BrowserServerSessionTransport,
+  IdentityTokenProvider,
+} from "@/services/contracts/server-session";
 import { getFirebaseAuthenticationProvider } from "@/services/firebase/auth-adapter";
-import {
-  getTrustedSessionRepositoryAdapters,
-  type TrustedSessionRepositoryAdapters,
-} from "@/services/firebase/trusted-session-repositories";
 
 export function createProductionFirebaseAuthenticationController(
-  authenticationProvider: AuthenticationProvider,
-  trustedRepositories: TrustedSessionRepositoryAdapters,
+  authenticationProvider: AuthenticationProvider & IdentityTokenProvider,
+  sessionTransport: BrowserServerSessionTransport,
+  sessionEstablished: () => void,
 ): AuthenticationClientController {
-  return createAuthenticationClientController(
+  return createServerSessionAuthenticationController(
     authenticationProvider,
-    createIdentitySessionResolutionService(trustedRepositories),
+    sessionTransport,
+    sessionEstablished,
   );
 }
 
@@ -27,7 +29,8 @@ export function getFirebaseAuthenticationController(): AuthenticationClientContr
   firebaseAuthenticationController ??=
     createProductionFirebaseAuthenticationController(
       getFirebaseAuthenticationProvider(),
-      getTrustedSessionRepositoryAdapters(),
+      getBrowserServerSessionTransport(),
+      () => window.location.assign("/app"),
     );
   return firebaseAuthenticationController;
 }

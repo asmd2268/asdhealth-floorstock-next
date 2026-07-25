@@ -12,6 +12,7 @@ import type {
   AuthenticationProvider,
   AuthenticationProviderFailureReason,
 } from "@/services/contracts/auth";
+import type { IdentityTokenProvider } from "@/services/contracts/server-session";
 
 import { getBrowserFirebaseApp } from "./browser";
 
@@ -39,6 +40,7 @@ export interface FirebaseAuthSdk {
     password: string,
   ): Promise<{ user: FirebaseUserLike }>;
   signOut(auth: FirebaseAuthLike): Promise<void>;
+  getIdToken(user: FirebaseUserLike): Promise<string>;
 }
 
 const firebaseSdk: FirebaseAuthSdk = {
@@ -52,6 +54,7 @@ const firebaseSdk: FirebaseAuthSdk = {
   signInWithEmailAndPassword: (auth, email, password) =>
     signInWithEmailAndPassword(auth as Auth, email, password),
   signOut: (auth) => firebaseSignOut(auth as Auth),
+  getIdToken: (user) => (user as User).getIdToken(true),
 };
 
 const credentialErrorCodes = new Set([
@@ -97,7 +100,7 @@ export function normalizeFirebaseIdentity(
 
 export function createFirebaseAuthenticationProvider(
   sdk: FirebaseAuthSdk = firebaseSdk,
-): AuthenticationProvider {
+): AuthenticationProvider & IdentityTokenProvider {
   let auth: FirebaseAuthLike | undefined;
   const resolveAuth = () => {
     auth ??= sdk.getAuth();
@@ -160,12 +163,30 @@ export function createFirebaseAuthenticationProvider(
         return { ok: false, reason: "provider_unavailable" };
       }
     },
+
+    async getIdentityToken() {
+      try {
+        const resolvedAuth = resolveAuth();
+        await resolvedAuth.authStateReady();
+        if (!resolvedAuth.currentUser) {
+          return { ok: false, reason: "provider_unavailable" };
+        }
+        const token = await sdk.getIdToken(resolvedAuth.currentUser);
+        return token
+          ? { ok: true, token }
+          : { ok: false, reason: "provider_unavailable" };
+      } catch {
+        return { ok: false, reason: "provider_unavailable" };
+      }
+    },
   };
 }
 
-let firebaseAuthenticationProvider: AuthenticationProvider | undefined;
+let firebaseAuthenticationProvider:
+  (AuthenticationProvider & IdentityTokenProvider) | undefined;
 
-export function getFirebaseAuthenticationProvider(): AuthenticationProvider {
+export function getFirebaseAuthenticationProvider(): AuthenticationProvider &
+  IdentityTokenProvider {
   firebaseAuthenticationProvider ??= createFirebaseAuthenticationProvider();
   return firebaseAuthenticationProvider;
 }

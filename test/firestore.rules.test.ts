@@ -118,6 +118,15 @@ beforeEach(async () => {
     tenantId,
     requestId: "request-1",
   });
+  await seed("serverSessions/session-1", {
+    schemaVersion: 1,
+    uid: activeUid,
+    credentialHash: "private-server-hash",
+  });
+  await seed("sessionTokenExchanges/fingerprint-1", {
+    sessionId: "session-1",
+    expiresAtMilliseconds: 1_900_000_000_000,
+  });
 });
 
 afterAll(async () => {
@@ -346,6 +355,37 @@ describe("Firestore trusted-session rules", () => {
           requestId: "request-3",
         }),
       () => deleteDoc(doc(firestore, "provisioningRequestKeys/existing-key")),
+    ];
+    for (const operation of operations) {
+      await expectExplicitDenial(operation());
+    }
+  });
+
+  it("denies all browser access to opaque server sessions", async () => {
+    const firestore = firestoreFor(activeUid);
+    const operations = [
+      () => getDoc(doc(firestore, "serverSessions/session-1")),
+      () => getDocs(collection(firestore, "serverSessions")),
+      () =>
+        setDoc(doc(firestore, "serverSessions/session-2"), {
+          uid: activeUid,
+        }),
+      () =>
+        updateDoc(doc(firestore, "serverSessions/session-1"), {
+          revokedAtMilliseconds: 1,
+        }),
+      () => deleteDoc(doc(firestore, "serverSessions/session-1")),
+      () => getDoc(doc(firestore, "sessionTokenExchanges/fingerprint-1")),
+      () => getDocs(collection(firestore, "sessionTokenExchanges")),
+      () =>
+        setDoc(doc(firestore, "sessionTokenExchanges/fingerprint-2"), {
+          sessionId: "session-2",
+        }),
+      () =>
+        updateDoc(doc(firestore, "sessionTokenExchanges/fingerprint-1"), {
+          sessionId: "session-2",
+        }),
+      () => deleteDoc(doc(firestore, "sessionTokenExchanges/fingerprint-1")),
     ];
     for (const operation of operations) {
       await expectExplicitDenial(operation());
