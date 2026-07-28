@@ -7,6 +7,7 @@ import { LOCALE_COOKIE_NAME, resolveLocale } from "@/i18n/locale";
 import { getVisibleNavigation } from "@/navigation/navigation";
 import { getServerSessionService } from "@/server/session/composition";
 import { readUniqueSessionCookie } from "@/server/session/cookies";
+import { getServerFacilityDisplayOptions } from "@/server/session/facility-options";
 import { getServerSessionCookieName } from "@/server/session/types";
 
 export default async function ProtectedApplicationPage() {
@@ -30,6 +31,8 @@ export default async function ProtectedApplicationPage() {
   }
   if (!session.ok) redirect("/");
   const { user, featureFlags } = session.value.trusted;
+  const facilities = await getServerFacilityDisplayOptions(user, featureFlags);
+  if (!facilities) redirect("/");
   const navigation = getVisibleNavigation({
     roleAssignments: user.roleAssignments,
     subjectScope: user.activeScope,
@@ -48,6 +51,7 @@ export default async function ProtectedApplicationPage() {
   return (
     <ServerAuthenticatedApp
       activeFacilityId={user.activeFacilityId}
+      facilities={facilities}
       branding={shellBranding}
       navigation={navigation}
       initialLocale={resolveLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value)}

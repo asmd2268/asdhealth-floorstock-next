@@ -37,11 +37,22 @@ export const createSessionBodySchema = z
   })
   .strict();
 
+export const switchFacilityBodySchema = z
+  .object({
+    facilityId: z.string().min(1).max(128).refine(isCanonicalTrustedIdentifier),
+  })
+  .strict();
+
 export const sessionRecordSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     sessionId: fixedToken(serverSessionLimits.sessionIdLength),
     uid: z.string().min(1).max(128).refine(isCanonicalTrustedIdentifier),
+    activeFacilityId: z
+      .string()
+      .min(1)
+      .max(128)
+      .refine(isCanonicalTrustedIdentifier),
     credentialHash: sha256Digest,
     firebaseAuthTimeSeconds: z.number().int().nonnegative(),
     createdAtMilliseconds: z.number().int().nonnegative(),
@@ -99,4 +110,13 @@ export function parseTokenFingerprint(input: unknown): string {
 
 export function parseSessionId(input: unknown): string {
   return fixedToken(serverSessionLimits.sessionIdLength).parse(input);
+}
+
+export function parseActiveFacilityId(input: unknown): string {
+  return z
+    .string()
+    .min(1)
+    .max(128)
+    .refine(isCanonicalTrustedIdentifier)
+    .parse(input);
 }

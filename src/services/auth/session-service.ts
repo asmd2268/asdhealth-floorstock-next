@@ -28,7 +28,10 @@ export function createIdentitySessionResolutionService(
   dependencies: TrustedSessionDependencies,
 ): IdentitySessionResolutionService {
   return {
-    async resolveIdentity(identity): Promise<SessionResolutionResult> {
+    async resolveIdentity(
+      identity,
+      requestedActiveFacilityId,
+    ): Promise<SessionResolutionResult> {
       try {
         const profile = await dependencies.userProfiles.getByUid(identity.uid);
         if (!profile) {
@@ -62,6 +65,7 @@ export function createIdentitySessionResolutionService(
           profile,
           roleAssignments: assignments,
           tenantDirectory,
+          requestedActiveFacilityId,
         });
       } catch {
         return { ok: false, failure: providerFailure() };

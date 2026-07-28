@@ -180,6 +180,126 @@ describe("session resolver", () => {
     }
   });
 
+  it("uses a validated requested facility instead of the trusted default", () => {
+    const secondScope = { ...facilityScope, facilityId: "facility-2" } as const;
+    const result = resolveSession(
+      input({
+        requestedActiveFacilityId: "facility-2",
+        profile: { ...profile, facilityIds: ["facility-2", "facility-1"] },
+        roleAssignments: [assignment, { ...assignment, scope: secondScope }],
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.activeFacilityId).toBe("facility-2");
+      expect(result.user.activeScope).toEqual(secondScope);
+    }
+  });
+
+  it("fails closed instead of falling back when a requested facility is stale", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            requestedActiveFacilityId: "facility-2",
+            profile: { ...profile, facilityIds: ["facility-1"] },
+          }),
+        ),
+      ),
+    ).toBe("active_facility_invalid");
+  });
+
+  it("rejects duplicate profile, organization, or facility identifiers", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            profile: {
+              ...profile,
+              facilityIds: ["facility-1", "facility-1"],
+            },
+          }),
+        ),
+      ),
+    ).toBe("facility_mismatch");
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: {
+              ...directory,
+              organizations: [
+                directory.organizations[0],
+                directory.organizations[0],
+              ],
+            },
+          }),
+        ),
+      ),
+    ).toBe("organization_mismatch");
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: {
+              ...directory,
+              facilities: [directory.facilities[0], directory.facilities[0]],
+            },
+          }),
+        ),
+      ),
+    ).toBe("facility_mismatch");
+  });
+
+  it("uses locale-independent canonical ID ordering only when no trusted default exists", () => {
+    const result = resolveSession(
+      input({
+        profile: {
+          ...profile,
+          activeFacilityId: null,
+          facilityIds: ["facility-z", "facility-A", "facility-10"],
+        },
+        tenantDirectory: {
+          ...directory,
+          facilities: ["facility-z", "facility-A", "facility-10"].map((id) => ({
+            id,
+            organizationId: "organization-1",
+          })),
+        },
+        roleAssignments: [
+          {
+            ...assignment,
+            scope: {
+              kind: "organization",
+              platformId: "platform-1",
+              organizationId: "organization-1",
+            },
+          },
+        ],
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      user: { activeFacilityId: "facility-10" },
+    });
+  });
+
+  it("rejects a facility whose parent organization is missing", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: {
+              ...directory,
+              organizations: [],
+            },
+          }),
+        ),
+      ),
+    ).toBe("organization_mismatch");
+  });
+
   it("retains multiple facility-scoped role assignments", () => {
     const secondScope = { ...facilityScope, facilityId: "facility-2" } as const;
     const result = resolveSession(

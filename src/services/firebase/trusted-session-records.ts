@@ -20,6 +20,12 @@ const trustedId = z
     "Expected a canonical trusted record identifier.",
   );
 
+const safeDisplayName = z
+  .string()
+  .min(1)
+  .max(120)
+  .refine((value) => value === value.trim() && !/\p{C}/u.test(value));
+
 const platformScope = z
   .object({
     kind: z.literal("platform"),
@@ -118,6 +124,7 @@ const tenantDirectorySchema = z
           .object({
             id: trustedId,
             organizationId: trustedId,
+            displayName: safeDisplayName.optional(),
           })
           .strict(),
       )

@@ -67,7 +67,10 @@ export interface SessionResolutionService {
 }
 
 export interface IdentitySessionResolutionService {
-  resolveIdentity(identity: ProviderIdentity): Promise<SessionResolutionResult>;
+  resolveIdentity(
+    identity: ProviderIdentity,
+    requestedActiveFacilityId?: string,
+  ): Promise<SessionResolutionResult>;
 }
 
 export interface AuthenticationSnapshot {

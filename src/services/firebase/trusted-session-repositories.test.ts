@@ -66,10 +66,14 @@ function reader(data: ReaderData = {}): TrustedFirestoreReader {
   };
 }
 
-async function resolve(data: ReaderData = {}) {
+async function resolve(
+  data: ReaderData = {},
+  requestedActiveFacilityId?: string,
+) {
   const repositories = createTrustedSessionRepositoryAdapters(reader(data));
   return createIdentitySessionResolutionService(repositories).resolveIdentity(
     identity,
+    requestedActiveFacilityId,
   );
 }
 
@@ -181,6 +185,41 @@ describe("trusted Firestore session repositories", () => {
       });
       expect(result.featureFlags).toEqual(validTenant.featureFlags);
     }
+  });
+
+  it("re-resolves a requested facility through the complete trusted repository chain", async () => {
+    const facility2 = {
+      id: "facility-2",
+      organizationId: "organization-1",
+    } as const;
+    const result = await resolve(
+      {
+        profile: {
+          ...validProfile,
+          facilityIds: ["facility-1", "facility-2"],
+        },
+        assignments: [
+          validAssignment,
+          {
+            ...validAssignment,
+            scope: { ...validAssignment.scope, facilityId: "facility-2" },
+          },
+        ],
+        tenant: {
+          ...validTenant,
+          facilities: [...validTenant.facilities, facility2],
+        },
+      },
+      "facility-2",
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      user: {
+        tenantId: "tenant-1",
+        activeFacilityId: "facility-2",
+        activeScope: { facilityId: "facility-2" },
+      },
+    });
   });
 
   it.each([

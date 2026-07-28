@@ -48,6 +48,7 @@ organizations: Array<{ id: string }> // 1–250
 facilities: Array<{                  // 1–2,000
   id: string
   organizationId: string            // must reference an organization above
+  displayName?: string               // 1–120 chars, trimmed, no Unicode category C
 }>
 featureFlags: {
   announcements: boolean
@@ -72,7 +73,7 @@ At most 50 role assignments are accepted. The Firestore query is bounded to 51 r
 
 ### `serverSessions/{sessionId}`
 
-Opaque server sessions are a separate Admin-only transport record. They contain a Firebase UID, random credential hash, bounded timestamps, and revocation state—but never tenant, facility, role, permission, override, or feature-flag data. Browser reads, lists, creates, updates, and deletes are all denied. See `docs/server-session-security.md` for the record and request-boundary details.
+Opaque server sessions are a separate Admin-only transport record. They contain a Firebase UID, one canonical active-facility selector, random credential hash, bounded timestamps, and revocation state—but never tenant, role, permission, override, or feature-flag data. The active facility is non-authoritative and is revalidated against current trusted records on every request. Browser reads, lists, creates, updates, and deletes are all denied. See `docs/server-session-security.md` for the record, rotation, absolute-lifetime, and request-boundary details.
 
 `sessionTokenExchanges/{domainSeparatedSha256(idToken)}` is an Admin-only, non-secret replay marker created atomically with a session. Browser access is denied. It contains the resulting session ID and expiry but never the source token or authorization data. Its digest domain differs from the opaque session-secret digest domain.
 

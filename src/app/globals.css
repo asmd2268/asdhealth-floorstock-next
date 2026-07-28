@@ -265,6 +265,44 @@ html[dir="rtl"] .sidebar-navigation a:hover {
   gap: 12px;
 }
 
+.facility-switcher {
+  position: relative;
+  display: flex;
+  align-items: end;
+  gap: 6px;
+}
+
+.facility-switch-button {
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, #d8e3e5);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 8%, white);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.facility-switch-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.facility-switch-error {
+  position: absolute;
+  inset-block-start: calc(100% + 5px);
+  inset-inline-end: 0;
+  z-index: 4;
+  width: min(280px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid #f2c7c7;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #9e3434;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .control-field {
   display: grid;
   gap: 3px;
@@ -951,6 +989,7 @@ html[dir="rtl"] .auth-card h1 {
 @media (max-width: 620px) {
   .topbar {
     min-height: 68px;
+    flex-wrap: wrap;
     padding: 9px 16px;
   }
 
@@ -960,6 +999,9 @@ html[dir="rtl"] .auth-card h1 {
   }
 
   .topbar-controls {
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 7px;
     margin-inline-start: auto;
   }
@@ -971,6 +1013,14 @@ html[dir="rtl"] .auth-card h1 {
 
   .language-field select {
     max-width: 102px;
+  }
+
+  .facility-field select {
+    max-width: 122px;
+  }
+
+  .facility-switch-button {
+    height: 38px;
   }
 
   .dashboard {

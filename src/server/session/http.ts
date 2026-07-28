@@ -9,7 +9,12 @@ import {
   getServerSessionCookieName,
   SERVER_SESSION_LIFETIME_SECONDS,
 } from "./types";
-import { createSessionBodySchema, serverSessionLimits } from "./validation";
+import {
+  createSessionBodySchema,
+  serverSessionLimits,
+  switchFacilityBodySchema,
+} from "./validation";
+import { parseJsonWithoutDuplicateKeys } from "./json";
 
 const statusByCode: Record<ServerSessionFailureCode, number> = {
   invalid_request: 400,
@@ -48,7 +53,10 @@ function safeError(code: ServerSessionFailureCode): Response {
   );
 }
 
-function isSameOriginRequest(request: Request, allowedOrigin: string): boolean {
+export function isSameOriginRequest(
+  request: Request,
+  allowedOrigin: string,
+): boolean {
   const origin = request.headers.get("origin");
   if (!origin || new TextEncoder().encode(origin).byteLength > 2_048) {
     return false;
@@ -96,13 +104,26 @@ export function invalidSessionCookieResult(
   };
 }
 
-async function readJsonBody(request: Request): Promise<unknown> {
+async function readJsonBody(
+  request: Request,
+  requireDeclaredLength = false,
+): Promise<unknown> {
   if (
     request.headers.get("content-type")?.split(";")[0] !== "application/json"
   ) {
     throw new Error("Invalid content type.");
   }
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  const declaredLengthHeader = request.headers.get("content-length");
+  if (requireDeclaredLength && declaredLengthHeader === null) {
+    throw new Error("Missing content length.");
+  }
+  if (
+    declaredLengthHeader !== null &&
+    !/^(0|[1-9][0-9]*)$/.test(declaredLengthHeader)
+  ) {
+    throw new Error("Invalid content length.");
+  }
+  const declaredLength = Number(declaredLengthHeader ?? "0");
   if (
     !Number.isFinite(declaredLength) ||
     declaredLength < 0 ||
@@ -110,14 +131,35 @@ async function readJsonBody(request: Request): Promise<unknown> {
   ) {
     throw new Error("Invalid content length.");
   }
-  const text = await request.text();
-  if (
-    new TextEncoder().encode(text).byteLength >
-    serverSessionLimits.requestBodyBytes
-  ) {
-    throw new Error("Request body too large.");
+  if (!request.body) throw new Error("Missing request body.");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let actualLength = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      actualLength += value.byteLength;
+      if (actualLength > serverSessionLimits.requestBodyBytes) {
+        await reader.cancel();
+        throw new Error("Request body too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
   }
-  return JSON.parse(text) as unknown;
+  if (declaredLengthHeader !== null && declaredLength !== actualLength) {
+    throw new Error("Content length mismatch.");
+  }
+  const bodyBytes = new Uint8Array(actualLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes);
+  return parseJsonWithoutDuplicateKeys(text);
 }
 
 export async function handleCreateSessionRequest(
@@ -192,6 +234,71 @@ export async function handleDeleteSessionRequest(
       { headers: { "cache-control": "no-store" } },
     ),
     clearCookie: createClearSessionCookie(production),
+  };
+}
+
+export async function handleSwitchFacilityRequest(
+  request: Request,
+  cookieValue: string | undefined,
+  service: ServerSessionService,
+  allowedOrigin: string,
+  production: boolean,
+  now: () => number = Date.now,
+): Promise<SessionHttpResult> {
+  if (!isSameOriginRequest(request, allowedOrigin)) {
+    return { response: safeError("forbidden") };
+  }
+  if (request.headers.get("x-asdhealth-session-action") !== "switch-facility") {
+    return { response: safeError("forbidden") };
+  }
+
+  let input: unknown;
+  try {
+    input = await readJsonBody(request, true);
+  } catch {
+    return { response: safeError("invalid_request") };
+  }
+  const body = switchFacilityBodySchema.safeParse(input);
+  if (!body.success) return { response: safeError("invalid_request") };
+
+  const result = await service.switchFacility(
+    cookieValue,
+    body.data.facilityId,
+  );
+  if (!result.ok) {
+    return {
+      response: safeError(result.code),
+      clearCookie:
+        result.code === "unauthenticated"
+          ? createClearSessionCookie(production)
+          : undefined,
+    };
+  }
+
+  return {
+    response: Response.json(
+      {
+        ok: true,
+        facility: { id: result.value.activeFacilityId },
+      },
+      { headers: { "cache-control": "no-store" } },
+    ),
+    cookie: {
+      name: getServerSessionCookieName(production),
+      value: result.value.cookieValue,
+      options: {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: production,
+        path: "/",
+        maxAge: Math.max(
+          1,
+          Math.ceil((result.value.expiresAtMilliseconds - now()) / 1_000),
+        ),
+        expires: new Date(result.value.expiresAtMilliseconds),
+        priority: "high",
+      },
+    },
   };
 }
 

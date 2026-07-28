@@ -64,6 +64,7 @@ export interface TenantOrganizationRecord {
 export interface TenantFacilityRecord {
   id: string;
   organizationId: string;
+  displayName?: string;
 }
 
 export interface TenantDirectory {

@@ -17,6 +17,12 @@ export interface Dictionary {
     facilityContext: string;
   };
   languages: Record<Locale, string>;
+  facilitySwitcher: {
+    label: string;
+    switchAction: string;
+    switching: string;
+    error: string;
+  };
   auth: {
     loadingTitle: string;
     loadingDescription: string;
@@ -92,6 +98,13 @@ const en: Dictionary = {
     facilityContext: "Active facility",
   },
   languages: { en: "English", ar: "Arabic" },
+  facilitySwitcher: {
+    label: "Facility",
+    switchAction: "Switch",
+    switching: "Switching…",
+    error:
+      "The change could not be confirmed. Refresh the page before trying again.",
+  },
   auth: {
     loadingTitle: "Preparing your secure workspace",
     loadingDescription: "Your identity and access scope are being verified.",
@@ -187,6 +200,12 @@ const ar: Dictionary = {
     facilityContext: "المنشأة النشطة",
   },
   languages: { en: "الإنجليزية", ar: "العربية" },
+  facilitySwitcher: {
+    label: "المنشأة",
+    switchAction: "تبديل",
+    switching: "جارٍ التبديل…",
+    error: "تعذر تأكيد تغيير المنشأة. حدّث الصفحة قبل المحاولة مرة أخرى.",
+  },
   auth: {
     loadingTitle: "جارٍ تجهيز مساحة العمل الآمنة",
     loadingDescription: "يتم التحقق من هويتك ونطاق صلاحياتك.",

@@ -49,13 +49,17 @@ export interface CreateTenantInput {
   tenantId: string;
   platformId: string;
   organizations: readonly { id: string }[];
-  facilities: readonly { id: string; organizationId: string }[];
+  facilities: readonly {
+    id: string;
+    organizationId: string;
+    displayName?: string;
+  }[];
   featureFlags: FeatureFlagSet;
 }
 
 export interface UpsertFacilityInput {
   tenantId: string;
-  facility: { id: string; organizationId: string };
+  facility: { id: string; organizationId: string; displayName?: string };
 }
 
 export interface UpsertUserProfileInput {

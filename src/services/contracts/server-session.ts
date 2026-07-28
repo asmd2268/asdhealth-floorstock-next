@@ -14,5 +14,11 @@ export type SessionTransportResult =
 
 export interface BrowserServerSessionTransport {
   create(idToken: string): Promise<SessionTransportResult>;
+  switchFacility(facilityId: string): Promise<SessionTransportResult>;
   revoke(): Promise<SessionTransportResult>;
+}
+
+export interface FacilityDisplayOption {
+  id: string;
+  displayName: string;
 }

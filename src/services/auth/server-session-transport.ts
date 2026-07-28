@@ -31,6 +31,23 @@ export function createBrowserServerSessionTransport(
         return { ok: false, reason: "provider_unavailable" };
       }
     },
+    async switchFacility(facilityId) {
+      try {
+        const response = await fetcher("/api/auth/session/facility", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+            "x-asdhealth-session-action": "switch-facility",
+          },
+          body: JSON.stringify({ facilityId }),
+          keepalive: true,
+        });
+        return normalizeResponse(response);
+      } catch {
+        return { ok: false, reason: "provider_unavailable" };
+      }
+    },
     async revoke() {
       try {
         const response = await fetcher("/api/auth/session", {

@@ -69,9 +69,10 @@ describe("Firebase Admin client boundary", () => {
       "utf8",
     );
     expect(productionShell).not.toMatch(
-      /AuthenticatedUser|FeatureFlagSet|roleAssignments|explicitPermissionOverrides/,
+      /AuthenticatedUser|FeatureFlagSet|roleAssignments|explicitPermissionOverrides|tenantId|organizationId|sessionId|credentialHash/,
     );
     expect(productionShell).toContain("readonly ShellNavigationItem[]");
+    expect(productionShell).toContain("readonly FacilityDisplayOption[]");
     expect(productionShell).not.toMatch(
       /branding:\s*BrandingConfiguration|import type \{ BrandingConfiguration \}/,
     );
@@ -89,5 +90,29 @@ describe("Firebase Admin client boundary", () => {
       "utf8",
     );
     expect(publicPage).toContain("getServerSessionService().authorize");
+  });
+
+  it("keeps facility switching operation-specific and server-authorized", () => {
+    const route = readFileSync(
+      join(process.cwd(), "src/app/api/auth/session/facility/route.ts"),
+      "utf8",
+    );
+    expect(route).toContain("readUniqueSessionCookie");
+    expect(route).toContain("handleSwitchFacilityRequest");
+    expect(route).not.toMatch(/tenantId|roleAssignments|featureFlags|returnTo/);
+
+    const clientSwitcher = readFileSync(
+      join(process.cwd(), "src/components/facility-switcher.tsx"),
+      "utf8",
+    );
+    expect(clientSwitcher).not.toMatch(
+      /AuthenticatedUser|tenantId|organizationId|roleAssignments|explicitPermissionOverrides|featureFlags|sessionId|credentialHash/,
+    );
+    const demoShell = readFileSync(
+      join(process.cwd(), "src/components/demo-app-shell.tsx"),
+      "utf8",
+    );
+    expect(demoShell).not.toContain("FacilitySwitcher");
+    expect(demoShell).not.toContain("switchFacility");
   });
 });

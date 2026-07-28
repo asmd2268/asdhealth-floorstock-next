@@ -22,6 +22,10 @@ const facilityScope = {
   organizationId: "organization-1",
   facilityId: "facility-1",
 } as const;
+const secondFacilityScope = {
+  ...facilityScope,
+  facilityId: "facility-2",
+} as const;
 const successfulSession: Extract<SessionResolutionResult, { ok: true }> = {
   ok: true,
   user: {
@@ -44,7 +48,22 @@ const successfulSession: Extract<SessionResolutionResult, { ok: true }> = {
   },
 };
 
+const secondFacilitySession: Extract<SessionResolutionResult, { ok: true }> = {
+  ...successfulSession,
+  user: {
+    ...successfulSession.user,
+    facilityIds: ["facility-1", "facility-2"],
+    activeFacilityId: "facility-2",
+    activeScope: secondFacilityScope,
+    roleAssignments: [
+      ...successfulSession.user.roleAssignments,
+      { role: "pharmacy_manager", scope: secondFacilityScope },
+    ],
+  },
+};
+
 function harness(trusted: SessionResolutionResult = successfulSession) {
+  let currentTime = now;
   const records = new Map<string, ServerSessionRecord>();
   const tokenFingerprints = new Set<string>();
   const store: ServerSessionStore = {
@@ -74,6 +93,27 @@ function harness(trusted: SessionResolutionResult = successfulSession) {
         return "created" as const;
       },
     ),
+    rotate: vi.fn(
+      async (record, rotation, _authorization, revokedAtMilliseconds) => {
+        const previous = records.get(rotation.sessionId);
+        if (
+          !previous ||
+          previous.uid !== rotation.uid ||
+          previous.credentialHash !== rotation.credentialHash ||
+          previous.revokedAtMilliseconds !== null ||
+          previous.expiresAtMilliseconds <= revokedAtMilliseconds ||
+          record.expiresAtMilliseconds !== previous.expiresAtMilliseconds
+        ) {
+          return "rotation_conflict" as const;
+        }
+        records.set(record.sessionId, record);
+        records.set(rotation.sessionId, {
+          ...previous,
+          revokedAtMilliseconds,
+        });
+        return "created" as const;
+      },
+    ),
     revoke: vi.fn(async (id, revokedAt) => {
       const record = records.get(id);
       if (record)
@@ -99,7 +139,7 @@ function harness(trusted: SessionResolutionResult = successfulSession) {
     identityVerifier: verifier,
     trustedSessions,
     store,
-    now: () => now,
+    now: () => currentTime,
   });
   return {
     records,
@@ -107,6 +147,9 @@ function harness(trusted: SessionResolutionResult = successfulSession) {
     store,
     trustedSessions,
     verifier,
+    advance: (milliseconds: number) => {
+      currentTime += milliseconds;
+    },
     setTrusted: (value: SessionResolutionResult) => {
       trustedResult = value;
     },
@@ -129,6 +172,7 @@ describe("server session service", () => {
     expect(value.store.create).toHaveBeenCalledWith(
       expect.objectContaining({
         uid: identity.uid,
+        activeFacilityId: "facility-1",
         revokedAtMilliseconds: null,
       }),
       expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -392,6 +436,10 @@ describe("server session service", () => {
     const value = await createCookie();
     const replacement = await value.service.create("fresh-token", value.cookie);
     expect(replacement.ok).toBe(true);
+    expect(value.trustedSessions.resolveIdentity).toHaveBeenLastCalledWith(
+      identity,
+      "facility-1",
+    );
     await expect(value.service.resolve(value.cookie)).resolves.toEqual({
       ok: false,
       code: "unauthenticated",
@@ -409,6 +457,17 @@ describe("server session service", () => {
     await expect(value.service.resolve(value.cookie)).resolves.toMatchObject({
       ok: true,
     });
+  });
+
+  it("does not create an unrotated replacement when the prior-session lookup is unavailable", async () => {
+    const value = await createCookie();
+    vi.mocked(value.store.get).mockRejectedValueOnce(
+      new Error("Firestore unavailable"),
+    );
+    await expect(
+      value.service.create("fresh-token", value.cookie),
+    ).resolves.toEqual({ ok: false, code: "provider_unavailable" });
+    expect(value.store.create).toHaveBeenCalledTimes(1);
   });
 
   it("leaves the old session valid when atomic rotation conflicts or fails", async () => {
@@ -447,6 +506,344 @@ describe("server session service", () => {
       (record) => record.revokedAtMilliseconds === null,
     );
     expect(activeRecords).toHaveLength(1);
+  });
+
+  it("atomically switches to an authorized facility and invalidates the old credential", async () => {
+    const value = await createCookie();
+    const previous = parseSessionCredential(value.cookie)!;
+    const previousExpiry = value.records.get(
+      previous.sessionId,
+    )!.expiresAtMilliseconds;
+    value.setTrusted(secondFacilitySession);
+
+    const result = await value.service.switchFacility(
+      value.cookie,
+      "facility-2",
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        activeFacilityId: "facility-2",
+        expiresAtMilliseconds: previousExpiry,
+      },
+    });
+    expect(value.trustedSessions.resolveIdentity).toHaveBeenLastCalledWith(
+      identity,
+      "facility-2",
+    );
+    await expect(value.service.resolve(value.cookie)).resolves.toEqual({
+      ok: false,
+      code: "unauthenticated",
+    });
+    if (!result.ok) throw new Error("Expected facility switch to succeed.");
+    await expect(
+      value.service.resolve(result.value.cookieValue),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        record: {
+          activeFacilityId: "facility-2",
+          expiresAtMilliseconds: previousExpiry,
+        },
+      },
+    });
+  });
+
+  it("rotates even when switching to the currently active facility", async () => {
+    const value = await createCookie();
+    const result = await value.service.switchFacility(
+      value.cookie,
+      "facility-1",
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) throw new Error("Expected facility switch to succeed.");
+    expect(result.value.cookieValue).not.toBe(value.cookie);
+    await expect(value.service.resolve(value.cookie)).resolves.toEqual({
+      ok: false,
+      code: "unauthenticated",
+    });
+  });
+
+  it("rejects malformed or currently unauthorized facility targets without rotating", async () => {
+    const value = await createCookie();
+    await expect(
+      value.service.switchFacility(value.cookie, "../facility-2"),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+
+    value.setTrusted({
+      ok: false,
+      failure: { category: "access_denied", reason: "facility_mismatch" },
+    });
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    expect(value.store.rotate).not.toHaveBeenCalled();
+    value.setTrusted(successfulSession);
+    await expect(value.service.resolve(value.cookie)).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("rejects a resolver that returns a different active facility than requested or stored", async () => {
+    const value = await createCookie();
+    value.setTrusted(successfulSession);
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    expect(value.store.rotate).not.toHaveBeenCalled();
+
+    value.setTrusted(secondFacilitySession);
+    await expect(value.service.resolve(value.cookie)).resolves.toEqual({
+      ok: false,
+      code: "forbidden",
+    });
+  });
+
+  it.each([
+    "account_disabled",
+    "tenant_inactive",
+    "profile_not_found",
+    "profile_incomplete",
+    "role_assignment_missing",
+    "role_assignment_mismatch",
+    "tenant_not_found",
+    "facility_mismatch",
+    "active_facility_invalid",
+  ] as const)("fails closed during switching for %s", async (reason) => {
+    const value = await createCookie();
+    value.setTrusted({
+      ok: false,
+      failure: { category: "access_denied", reason },
+    });
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    expect(value.store.rotate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a target outside applicable role scope or with an explicit dashboard deny", async () => {
+    for (const user of [
+      {
+        ...secondFacilitySession.user,
+        roleAssignments: successfulSession.user.roleAssignments,
+      },
+      {
+        ...secondFacilitySession.user,
+        explicitPermissionOverrides: [
+          {
+            effect: "deny" as const,
+            resource: "dashboard" as const,
+            action: "read" as const,
+            scope: secondFacilityScope,
+          },
+        ],
+      },
+    ]) {
+      const value = await createCookie();
+      value.setTrusted({ ...secondFacilitySession, user });
+      await expect(
+        value.service.switchFacility(value.cookie, "facility-2"),
+      ).resolves.toEqual({ ok: false, code: "forbidden" });
+      expect(value.store.rotate).not.toHaveBeenCalled();
+    }
+  });
+
+  it("allows only one concurrent switch and preserves the original absolute expiry", async () => {
+    const value = await createCookie();
+    const original = parseSessionCredential(value.cookie)!;
+    const absoluteExpiry = value.records.get(
+      original.sessionId,
+    )!.expiresAtMilliseconds;
+    value.setTrusted(secondFacilitySession);
+    value.advance(60_000);
+    const [first, second] = await Promise.all([
+      value.service.switchFacility(value.cookie, "facility-2"),
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ]);
+    expect([first.ok, second.ok].sort()).toEqual([false, true]);
+    const successful = first.ok ? first : second;
+    if (!successful.ok) throw new Error("Expected one switch to succeed.");
+    expect(successful.value.expiresAtMilliseconds).toBe(absoluteExpiry);
+
+    value.setTrusted(successfulSession);
+    value.advance(60_000);
+    const switchedBack = await value.service.switchFacility(
+      successful.value.cookieValue,
+      "facility-1",
+    );
+    expect(switchedBack).toMatchObject({
+      ok: true,
+      value: { expiresAtMilliseconds: absoluteExpiry },
+    });
+  });
+
+  it("preserves one absolute lifetime across repeated and near-expiry switches", async () => {
+    const value = await createCookie();
+    const originalCredential = parseSessionCredential(value.cookie)!;
+    const absoluteExpiry = value.records.get(
+      originalCredential.sessionId,
+    )!.expiresAtMilliseconds;
+    let cookie = value.cookie;
+
+    for (let index = 0; index < 12; index += 1) {
+      const toSecond = index % 2 === 0;
+      value.setTrusted(toSecond ? secondFacilitySession : successfulSession);
+      value.advance(1_000);
+      const switched = await value.service.switchFacility(
+        cookie,
+        toSecond ? "facility-2" : "facility-1",
+      );
+      if (!switched.ok) throw new Error("Expected repeated switch to succeed.");
+      expect(switched.value.expiresAtMilliseconds).toBe(absoluteExpiry);
+      cookie = switched.value.cookieValue;
+    }
+
+    value.advance(absoluteExpiry - now - 12_000 - 1);
+    value.setTrusted(secondFacilitySession);
+    const nearBoundary = await value.service.switchFacility(
+      cookie,
+      "facility-2",
+    );
+    expect(nearBoundary).toMatchObject({
+      ok: true,
+      value: { expiresAtMilliseconds: absoluteExpiry },
+    });
+    if (!nearBoundary.ok) throw new Error("Expected near-boundary switch.");
+
+    value.advance(1);
+    await expect(
+      value.service.switchFacility(
+        nearBoundary.value.cookieValue,
+        "facility-1",
+      ),
+    ).resolves.toEqual({ ok: false, code: "unauthenticated" });
+  });
+
+  it("keeps the old session usable when facility rotation conflicts or throws", async () => {
+    for (const failure of ["rotation_conflict", "throw"] as const) {
+      const value = await createCookie();
+      value.setTrusted(secondFacilitySession);
+      if (failure === "throw") {
+        vi.mocked(value.store.rotate).mockRejectedValueOnce(
+          new Error("transaction failed"),
+        );
+      } else {
+        vi.mocked(value.store.rotate).mockResolvedValueOnce(
+          "rotation_conflict",
+        );
+      }
+      await expect(
+        value.service.switchFacility(value.cookie, "facility-2"),
+      ).resolves.toMatchObject({ ok: false });
+      value.setTrusted(successfulSession);
+      await expect(value.service.resolve(value.cookie)).resolves.toMatchObject({
+        ok: true,
+      });
+    }
+  });
+
+  it("reports a transactional trusted-state conflict as forbidden without revoking the predecessor", async () => {
+    const value = await createCookie();
+    value.setTrusted(secondFacilitySession);
+    vi.mocked(value.store.rotate).mockResolvedValueOnce(
+      "authorization_conflict",
+    );
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    value.setTrusted(successfulSession);
+    await expect(value.service.resolve(value.cookie)).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("rejects forged, expired, and revoked switch credentials", async () => {
+    const value = await createCookie();
+    const credential = parseSessionCredential(value.cookie)!;
+    await expect(
+      value.service.switchFacility(
+        `${credential.sessionId}.${"z".repeat(43)}`,
+        "facility-2",
+      ),
+    ).resolves.toEqual({ ok: false, code: "unauthenticated" });
+
+    const record = value.records.get(credential.sessionId)!;
+    value.records.set(credential.sessionId, {
+      ...record,
+      expiresAtMilliseconds: now,
+    });
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "unauthenticated" });
+    value.records.set(credential.sessionId, {
+      ...record,
+      revokedAtMilliseconds: now,
+    });
+    await expect(
+      value.service.switchFacility(value.cookie, "facility-2"),
+    ).resolves.toEqual({ ok: false, code: "unauthenticated" });
+  });
+
+  it("rejects a switched facility immediately when current trusted scope removes it", async () => {
+    const value = await createCookie();
+    value.setTrusted(secondFacilitySession);
+    const switched = await value.service.switchFacility(
+      value.cookie,
+      "facility-2",
+    );
+    if (!switched.ok) throw new Error("Expected facility switch to succeed.");
+    value.setTrusted({
+      ok: false,
+      failure: { category: "access_denied", reason: "active_facility_invalid" },
+    });
+    await expect(
+      value.service.resolve(switched.value.cookieValue),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+  });
+
+  it("applies feature and explicit-deny changes immediately after switching", async () => {
+    const value = await createCookie();
+    value.setTrusted(secondFacilitySession);
+    const switched = await value.service.switchFacility(
+      value.cookie,
+      "facility-2",
+    );
+    if (!switched.ok) throw new Error("Expected facility switch to succeed.");
+
+    value.setTrusted({
+      ...secondFacilitySession,
+      featureFlags: {
+        ...secondFacilitySession.featureFlags,
+        announcements: false,
+      },
+    });
+    await expect(
+      value.service.authorize(switched.value.cookieValue, {
+        resource: "announcements",
+        action: "read",
+      }),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+
+    value.setTrusted({
+      ...secondFacilitySession,
+      user: {
+        ...secondFacilitySession.user,
+        explicitPermissionOverrides: [
+          {
+            effect: "deny",
+            resource: "dashboard",
+            action: "read",
+            scope: secondFacilityScope,
+          },
+        ],
+      },
+    });
+    await expect(
+      value.service.authorize(switched.value.cookieValue, {
+        resource: "dashboard",
+        action: "read",
+      }),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
   });
 
   it("revokes the server record so a captured cookie cannot be replayed after sign-out", async () => {

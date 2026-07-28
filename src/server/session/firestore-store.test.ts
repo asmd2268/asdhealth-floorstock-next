@@ -5,12 +5,19 @@ import {
   serverSessionCollection,
   sessionTokenExchangeCollection,
 } from "./firestore-store";
-import type { ServerSessionRecord } from "./types";
+import { resolveSession } from "@/domain/auth/session-resolver";
+
+import { fingerprintTrustedAuthorization } from "./trusted-authorization";
+import type {
+  ServerSessionRecord,
+  ServerSessionRotationAuthorization,
+} from "./types";
 
 const record: ServerSessionRecord = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   sessionId: "a".repeat(43),
   uid: "user-1",
+  activeFacilityId: "facility-1",
   credentialHash: "b".repeat(64),
   firebaseAuthTimeSeconds: 1_800_000_000,
   createdAtMilliseconds: 1_800_000_000_000,
@@ -27,11 +34,55 @@ function firestore() {
       data: () => documents.get(path),
     })),
   });
+  interface QueryReference {
+    kind: "query";
+    path: string;
+    filters: { field: string; value: unknown }[];
+    maximum: number;
+    where(field: string, operation: string, value: unknown): QueryReference;
+    limit(maximum: number): QueryReference;
+  }
+  const query = (
+    path: string,
+    filters: QueryReference["filters"] = [],
+    maximum = Number.POSITIVE_INFINITY,
+  ): QueryReference => ({
+    kind: "query",
+    path,
+    filters,
+    maximum,
+    where: (field, operation, value) => {
+      if (operation !== "==") throw new Error("Unexpected query operation.");
+      return query(path, [...filters, { field, value }], maximum);
+    },
+    limit: (nextMaximum) => query(path, filters, nextMaximum),
+  });
   const transaction = {
-    get: vi.fn(async (document: { path: string }) => ({
-      exists: documents.has(document.path),
-      data: () => documents.get(document.path),
-    })),
+    get: vi.fn(async (target: { path: string; kind?: "query" }) => {
+      if (target.kind === "query") {
+        const targetQuery = target as QueryReference;
+        const matching = [...documents.entries()]
+          .filter(([path, value]) => {
+            if (!path.startsWith(`${targetQuery.path}/`)) return false;
+            const remainder = path.slice(targetQuery.path.length + 1);
+            if (remainder.includes("/")) return false;
+            return targetQuery.filters.every(
+              (filter) =>
+                (value as Record<string, unknown>)[filter.field] ===
+                filter.value,
+            );
+          })
+          .slice(0, targetQuery.maximum);
+        return {
+          size: matching.length,
+          docs: matching.map(([, value]) => ({ data: () => value })),
+        };
+      }
+      return {
+        exists: documents.has(target.path),
+        data: () => documents.get(target.path),
+      };
+    }),
     create: vi.fn((document: { path: string }, value: unknown) => {
       if (documents.has(document.path)) throw new Error("already exists");
       documents.set(document.path, value);
@@ -47,7 +98,9 @@ function firestore() {
     documents,
     transaction,
     sdk: {
+      doc: vi.fn((path: string) => reference(path)),
       collection: vi.fn((collection: string) => ({
+        ...query(collection),
         doc: (id: string) => reference(`${collection}/${id}`),
       })),
       runTransaction: vi.fn(
@@ -55,6 +108,73 @@ function firestore() {
           operation(transaction),
       ),
     },
+  };
+}
+
+const trustedProfile = {
+  uid: "user-1",
+  tenantId: "tenant-1",
+  organizationId: "organization-1",
+  facilityIds: ["facility-1", "facility-2"],
+  activeFacilityId: "facility-1",
+  accountStatus: "active",
+  explicitPermissionOverrides: [],
+} as const;
+const trustedAssignment = {
+  uid: "user-1",
+  tenantId: "tenant-1",
+  roleId: "pharmacy_manager",
+  scope: {
+    kind: "organization",
+    platformId: "platform-1",
+    organizationId: "organization-1",
+  },
+} as const;
+const trustedDirectory = {
+  tenantId: "tenant-1",
+  status: "active",
+  platformId: "platform-1",
+  organizations: [{ id: "organization-1" }],
+  facilities: [
+    { id: "facility-1", organizationId: "organization-1" },
+    { id: "facility-2", organizationId: "organization-1" },
+  ],
+  featureFlags: {
+    announcements: true,
+    zebra_labels: true,
+    new_request: false,
+    controlled_medicines: false,
+  },
+} as const;
+
+function seedTrustedAuthorization(value: ReturnType<typeof firestore>) {
+  value.documents.set("userProfiles/user-1", trustedProfile);
+  value.documents.set(
+    "userRoleAssignments/user-1/assignments/assignment-1",
+    trustedAssignment,
+  );
+  value.documents.set("tenantDirectories/tenant-1", trustedDirectory);
+}
+
+function rotationAuthorization(): ServerSessionRotationAuthorization {
+  const identity = {
+    uid: "user-1",
+    email: "user@example.com",
+    displayName: "User",
+  };
+  const trusted = resolveSession({
+    identity,
+    profile: trustedProfile,
+    roleAssignments: [trustedAssignment],
+    tenantDirectory: trustedDirectory,
+    requestedActiveFacilityId: "facility-2",
+  });
+  if (!trusted.ok) throw new Error("Expected valid trusted fixture.");
+  return {
+    identity,
+    tenantId: "tenant-1",
+    activeFacilityId: "facility-2",
+    trustedStateFingerprint: fingerprintTrustedAuthorization(trusted),
   };
 }
 
@@ -124,6 +244,204 @@ describe("Firestore server-session store", () => {
     );
   });
 
+  it("atomically rotates a facility session without extending its absolute expiry", async () => {
+    const value = firestore();
+    seedTrustedAuthorization(value);
+    const store = createFirestoreServerSessionStore(value.sdk as never);
+    const oldRecord = { ...record, sessionId: "e".repeat(43) };
+    const rotatedAt = record.createdAtMilliseconds + 60_000;
+    const replacement = {
+      ...record,
+      sessionId: "f".repeat(43),
+      activeFacilityId: "facility-2",
+      createdAtMilliseconds: rotatedAt,
+    };
+    value.documents.set(
+      `${serverSessionCollection}/${oldRecord.sessionId}`,
+      oldRecord,
+    );
+
+    await expect(
+      store.rotate(
+        replacement,
+        {
+          sessionId: oldRecord.sessionId,
+          uid: oldRecord.uid,
+          credentialHash: oldRecord.credentialHash,
+        },
+        rotationAuthorization(),
+        rotatedAt,
+      ),
+    ).resolves.toBe("created");
+    expect(
+      value.documents.get(`${serverSessionCollection}/${oldRecord.sessionId}`),
+    ).toMatchObject({ revokedAtMilliseconds: rotatedAt });
+    expect(
+      value.documents.get(
+        `${serverSessionCollection}/${replacement.sessionId}`,
+      ),
+    ).toEqual(replacement);
+    expect(
+      [...value.documents.keys()].some((path) =>
+        path.startsWith(`${sessionTokenExchangeCollection}/`),
+      ),
+    ).toBe(false);
+    expect(value.transaction.get.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      value.transaction.create.mock.invocationCallOrder.at(-1)!,
+    );
+  });
+
+  it("rejects facility rotation when the old proof or absolute expiry does not match", async () => {
+    const value = firestore();
+    seedTrustedAuthorization(value);
+    const store = createFirestoreServerSessionStore(value.sdk as never);
+    const oldRecord = { ...record, sessionId: "e".repeat(43) };
+    const rotatedAt = record.createdAtMilliseconds + 1;
+    value.documents.set(
+      `${serverSessionCollection}/${oldRecord.sessionId}`,
+      oldRecord,
+    );
+    const before = new Map(value.documents);
+
+    await expect(
+      store.rotate(
+        {
+          ...record,
+          sessionId: "f".repeat(43),
+          activeFacilityId: "facility-2",
+          createdAtMilliseconds: rotatedAt,
+          expiresAtMilliseconds: record.expiresAtMilliseconds + 1,
+        },
+        {
+          sessionId: oldRecord.sessionId,
+          uid: oldRecord.uid,
+          credentialHash: oldRecord.credentialHash,
+        },
+        rotationAuthorization(),
+        rotatedAt,
+      ),
+    ).resolves.toBe("rotation_conflict");
+    expect(value.documents).toEqual(before);
+  });
+
+  it("re-checks absolute expiry inside each transaction callback attempt", async () => {
+    const value = firestore();
+    seedTrustedAuthorization(value);
+    const store = createFirestoreServerSessionStore(
+      value.sdk as never,
+      () => record.expiresAtMilliseconds,
+    );
+    const oldRecord = { ...record, sessionId: "e".repeat(43) };
+    const rotatedAt = record.expiresAtMilliseconds - 1;
+    value.documents.set(
+      `${serverSessionCollection}/${oldRecord.sessionId}`,
+      oldRecord,
+    );
+
+    await expect(
+      store.rotate(
+        {
+          ...record,
+          sessionId: "f".repeat(43),
+          activeFacilityId: "facility-2",
+          createdAtMilliseconds: rotatedAt,
+        },
+        {
+          sessionId: oldRecord.sessionId,
+          uid: oldRecord.uid,
+          credentialHash: oldRecord.credentialHash,
+        },
+        rotationAuthorization(),
+        rotatedAt,
+      ),
+    ).resolves.toBe("rotation_conflict");
+    expect(
+      value.documents.get(`${serverSessionCollection}/${oldRecord.sessionId}`),
+    ).toEqual(oldRecord);
+    expect(
+      value.documents.has(`${serverSessionCollection}/${"f".repeat(43)}`),
+    ).toBe(false);
+  });
+
+  it.each([
+    [
+      "disabled profile",
+      () => ({ ...trustedProfile, accountStatus: "disabled" }),
+      "userProfiles/user-1",
+    ],
+    [
+      "inactive tenant",
+      () => ({ ...trustedDirectory, status: "inactive" }),
+      "tenantDirectories/tenant-1",
+    ],
+    [
+      "removed facility membership",
+      () => ({ ...trustedProfile, facilityIds: ["facility-1"] }),
+      "userProfiles/user-1",
+    ],
+    [
+      "new explicit dashboard deny",
+      () => ({
+        ...trustedProfile,
+        explicitPermissionOverrides: [
+          {
+            effect: "deny",
+            resource: "dashboard",
+            action: "read",
+            scope: {
+              kind: "facility",
+              platformId: "platform-1",
+              organizationId: "organization-1",
+              facilityId: "facility-2",
+            },
+          },
+        ],
+      }),
+      "userProfiles/user-1",
+    ],
+  ] as const)(
+    "aborts rotation atomically when trusted state changes to %s before commit",
+    async (_name, changedRecord, path) => {
+      const value = firestore();
+      seedTrustedAuthorization(value);
+      const store = createFirestoreServerSessionStore(value.sdk as never);
+      const oldRecord = { ...record, sessionId: "e".repeat(43) };
+      const rotatedAt = record.createdAtMilliseconds + 1;
+      value.documents.set(
+        `${serverSessionCollection}/${oldRecord.sessionId}`,
+        oldRecord,
+      );
+      const authorization = rotationAuthorization();
+      value.documents.set(path, changedRecord());
+
+      await expect(
+        store.rotate(
+          {
+            ...record,
+            sessionId: "f".repeat(43),
+            activeFacilityId: "facility-2",
+            createdAtMilliseconds: rotatedAt,
+          },
+          {
+            sessionId: oldRecord.sessionId,
+            uid: oldRecord.uid,
+            credentialHash: oldRecord.credentialHash,
+          },
+          authorization,
+          rotatedAt,
+        ),
+      ).resolves.toBe("authorization_conflict");
+      expect(
+        value.documents.get(
+          `${serverSessionCollection}/${oldRecord.sessionId}`,
+        ),
+      ).toEqual(oldRecord);
+      expect(
+        value.documents.has(`${serverSessionCollection}/${"f".repeat(43)}`),
+      ).toBe(false);
+    },
+  );
+
   it("fails closed before writes on rotation mismatch or malformed identifiers", async () => {
     const value = firestore();
     const store = createFirestoreServerSessionStore(value.sdk as never);
@@ -170,5 +488,16 @@ describe("Firestore server-session store", () => {
       expiresAtMilliseconds: record.createdAtMilliseconds + 99_999_999,
     });
     await expect(store.get(record.sessionId)).rejects.toThrow();
+  });
+
+  it("treats a legacy schema-v1 session as an unauthenticated miss", async () => {
+    const value = firestore();
+    const store = createFirestoreServerSessionStore(value.sdk as never);
+    value.documents.set(`${serverSessionCollection}/${record.sessionId}`, {
+      ...record,
+      schemaVersion: 1,
+      activeFacilityId: undefined,
+    });
+    await expect(store.get(record.sessionId)).resolves.toBeNull();
   });
 });

@@ -141,6 +141,33 @@ describe("trusted session record validation", () => {
     );
   });
 
+  it("accepts a bounded safe facility display name and rejects unsafe labels", () => {
+    expect(
+      parseTrustedTenantDirectory({
+        ...validTenantDocument,
+        facilities: [
+          {
+            ...validTenantDocument.facilities[0],
+            displayName: "Central Hospital",
+          },
+        ],
+      }).facilities[0].displayName,
+    ).toBe("Central Hospital");
+    for (const displayName of [
+      " Hospital",
+      "Hospital\nNorth",
+      "Hospital\u202ENorth",
+      "x".repeat(121),
+    ]) {
+      expect(() =>
+        parseTrustedTenantDirectory({
+          ...validTenantDocument,
+          facilities: [{ ...validTenantDocument.facilities[0], displayName }],
+        }),
+      ).toThrow();
+    }
+  });
+
   it("preserves inactive tenant status for fail-closed session resolution", () => {
     expect(
       parseTrustedTenantDirectory({
