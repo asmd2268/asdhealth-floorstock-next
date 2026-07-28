@@ -40,6 +40,7 @@ export const validTenantDocument = {
     zebra_labels: true,
     new_request: false,
     controlled_medicines: false,
+    inventory: false,
   },
 } as const;
 

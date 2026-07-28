@@ -47,12 +47,21 @@ function resolveFeatureFlags(
   flags: TenantDirectory["featureFlags"],
 ): FeatureFlagSet | null {
   if (!flags) return null;
-  if (featureIds.some((feature) => typeof flags[feature] !== "boolean")) {
+  const existingFeatures = featureIds.filter(
+    (feature) => feature !== "inventory",
+  );
+  if (
+    existingFeatures.some((feature) => typeof flags[feature] !== "boolean") ||
+    (flags.inventory !== undefined && typeof flags.inventory !== "boolean")
+  ) {
     return null;
   }
 
   return Object.fromEntries(
-    featureIds.map((feature) => [feature, flags[feature]]),
+    featureIds.map((feature) => [
+      feature,
+      feature === "inventory" ? flags.inventory === true : flags[feature],
+    ]),
   ) as FeatureFlagSet;
 }
 

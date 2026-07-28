@@ -20,6 +20,7 @@ const featureFlags = {
   zebra_labels: true,
   new_request: true,
   controlled_medicines: false,
+  inventory: true,
 } as const;
 
 function idsFor(
@@ -46,7 +47,9 @@ describe("navigation visibility", () => {
 
   it("uses one canonical target for every href and rendered section", () => {
     for (const item of navigationItems) {
-      expect(item.href).toBe(`#${item.targetId}`);
+      expect(item.href).toBe(
+        item.id === "inventory" ? "/app/inventory" : `#${item.targetId}`,
+      );
       expect(item.targetId).toBe(item.id.replaceAll("_", "-"));
     }
   });
@@ -56,6 +59,7 @@ describe("navigation visibility", () => {
       "dashboard",
       "announcements",
       "zebra_labels",
+      "inventory",
     ]);
     expect(idsFor("master")).not.toContain("new_request");
   });

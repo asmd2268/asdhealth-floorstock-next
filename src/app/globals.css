@@ -65,6 +65,97 @@ a {
   margin-inline: auto;
 }
 
+.inventory-shell {
+  min-height: 100vh;
+  background: var(--background);
+  padding: clamp(18px, 4vw, 48px);
+}
+.inventory-shell > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+}
+.inventory-shell > header p {
+  color: var(--accent);
+  font-weight: 750;
+  margin: 0;
+}
+.inventory-shell > header h1 {
+  margin-block: 4px;
+}
+.inventory-shell > header span,
+.inventory-shell section > p {
+  color: var(--muted);
+}
+.inventory-shell > header a,
+.inventory-denied a {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.inventory-shell main {
+  display: grid;
+  gap: 24px;
+  margin-block: 30px;
+}
+.inventory-shell section,
+.inventory-form {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+}
+.inventory-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.inventory-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.inventory-form input,
+.inventory-form select {
+  min-height: 42px;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+}
+.inventory-form button {
+  align-self: end;
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+.inventory-table-wrap {
+  overflow-x: auto;
+}
+.inventory-shell table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.inventory-shell th,
+.inventory-shell td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+}
+.inventory-shell footer {
+  text-align: center;
+  color: var(--muted);
+}
+.inventory-denied {
+  padding: 48px;
+}
+
 .admin-header {
   display: flex;
   align-items: center;

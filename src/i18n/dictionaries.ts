@@ -76,12 +76,52 @@ export interface Dictionary {
     zebraLabels: string;
     newRequest: string;
     controlledMedicines: string;
+    inventory: string;
   };
   modules: {
     announcementsDescription: string;
     zebraLabelsDescription: string;
     newRequestDescription: string;
     controlledMedicinesDescription: string;
+    inventoryDescription: string;
+  };
+  inventory: {
+    title: string;
+    subtitle: string;
+    backToApp: string;
+    items: string;
+    locations: string;
+    balances: string;
+    transactions: string;
+    empty: string;
+    itemCode: string;
+    medication: string;
+    location: string;
+    quantity: string;
+    lot: string;
+    expiry: string;
+    operation: string;
+    receive: string;
+    issue: string;
+    adjustIncrease: string;
+    adjustDecrease: string;
+    transfer: string;
+    source: string;
+    destination: string;
+    unit: string;
+    post: string;
+    posting: string;
+    success: string;
+    error: string;
+    accessDenied: string;
+    transactionTypes: Record<
+      | "receipt"
+      | "issue"
+      | "adjustment_increase"
+      | "adjustment_decrease"
+      | "transfer",
+      string
+    >;
   };
   administration: {
     title: string;
@@ -229,6 +269,7 @@ const en: Dictionary = {
     zebraLabels: "Zebra labels",
     newRequest: "New request",
     controlledMedicines: "Controlled medicines",
+    inventory: "Inventory",
   },
   modules: {
     announcementsDescription:
@@ -237,6 +278,45 @@ const en: Dictionary = {
     newRequestDescription: "Create a new department floor stock request.",
     controlledMedicinesDescription:
       "Controlled medicines permission foundation.",
+    inventoryDescription: "View and post facility-scoped inventory movements.",
+  },
+  inventory: {
+    title: "Inventory",
+    subtitle:
+      "Medication catalog, locations, balances, and immutable movements",
+    backToApp: "Back to dashboard",
+    items: "Medication catalog",
+    locations: "Locations",
+    balances: "Balances",
+    transactions: "Recent movements",
+    empty: "No records are available in this facility.",
+    itemCode: "Item code",
+    medication: "Medication",
+    location: "Location",
+    quantity: "Quantity",
+    lot: "Lot",
+    expiry: "Expiry",
+    operation: "Operation",
+    receive: "Receive",
+    issue: "Issue",
+    adjustIncrease: "Adjustment increase",
+    adjustDecrease: "Adjustment decrease",
+    transfer: "Transfer",
+    source: "Source",
+    destination: "Destination",
+    unit: "Unit",
+    post: "Post movement",
+    posting: "Posting…",
+    success: "Movement posted securely.",
+    error: "The movement could not be posted.",
+    accessDenied: "Inventory access is not available for this session.",
+    transactionTypes: {
+      receipt: "Receipt",
+      issue: "Issue",
+      adjustment_increase: "Adjustment increase",
+      adjustment_decrease: "Adjustment decrease",
+      transfer: "Transfer",
+    },
   },
   administration: {
     title: "Trusted administration",
@@ -410,12 +490,51 @@ const ar: Dictionary = {
     zebraLabels: "ملصقات زيبرا",
     newRequest: "طلب جديد",
     controlledMedicines: "الأدوية المخدرة والمقيدة",
+    inventory: "المخزون",
   },
   modules: {
     announcementsDescription: "عرض إعلانات الصيدلية والتنبيهات التشغيلية.",
     zebraLabelsDescription: "الوصول إلى مساحة طباعة ملصقات زيبرا.",
     newRequestDescription: "إنشاء طلب جديد لمخزون القسم.",
     controlledMedicinesDescription: "أساس صلاحيات الأدوية المخدرة والمقيدة.",
+    inventoryDescription: "عرض حركات مخزون المنشأة وتسجيلها.",
+  },
+  inventory: {
+    title: "المخزون",
+    subtitle: "دليل الأدوية والمواقع والأرصدة والحركات غير القابلة للتعديل",
+    backToApp: "العودة إلى لوحة المعلومات",
+    items: "دليل الأدوية",
+    locations: "المواقع",
+    balances: "الأرصدة",
+    transactions: "الحركات الأخيرة",
+    empty: "لا توجد سجلات متاحة في هذه المنشأة.",
+    itemCode: "رمز الصنف",
+    medication: "الدواء",
+    location: "الموقع",
+    quantity: "الكمية",
+    lot: "التشغيلة",
+    expiry: "تاريخ الانتهاء",
+    operation: "العملية",
+    receive: "استلام",
+    issue: "صرف",
+    adjustIncrease: "تسوية بالزيادة",
+    adjustDecrease: "تسوية بالنقص",
+    transfer: "نقل",
+    source: "المصدر",
+    destination: "الوجهة",
+    unit: "الوحدة",
+    post: "تسجيل الحركة",
+    posting: "جارٍ التسجيل…",
+    success: "تم تسجيل الحركة بأمان.",
+    error: "تعذر تسجيل الحركة.",
+    accessDenied: "الوصول إلى المخزون غير متاح لهذه الجلسة.",
+    transactionTypes: {
+      receipt: "استلام",
+      issue: "صرف",
+      adjustment_increase: "تسوية بالزيادة",
+      adjustment_decrease: "تسوية بالنقص",
+      transfer: "نقل",
+    },
   },
   administration: {
     title: "الإدارة الموثوقة",

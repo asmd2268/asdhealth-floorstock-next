@@ -23,6 +23,11 @@ export const permissionActions = [
   "edit",
   "delete",
   "approve",
+  "manage",
+  "receive",
+  "issue",
+  "adjust",
+  "transfer",
 ] as const;
 
 export type PermissionAction = (typeof permissionActions)[number];
@@ -37,6 +42,11 @@ export const resourceIds = [
   "zebra_labels",
   "new_request",
   "controlled_medicines",
+  "inventory_item",
+  "inventory_location",
+  "inventory_stock",
+  "inventory_balance",
+  "inventory_transaction",
 ] as const;
 
 export type ResourceId = (typeof resourceIds)[number];

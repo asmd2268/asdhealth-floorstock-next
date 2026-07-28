@@ -13,6 +13,7 @@ export const navigationItemIds = [
   "zebra_labels",
   "new_request",
   "controlled_medicines",
+  "inventory",
 ] as const;
 
 export type NavigationItemId = (typeof navigationItemIds)[number];
@@ -20,7 +21,7 @@ export type NavigationItemId = (typeof navigationItemIds)[number];
 export interface NavigationItem {
   id: NavigationItemId;
   targetId: string;
-  href: `#${string}`;
+  href: `#${string}` | `/app/${string}`;
   resource: ResourceId;
   action: PermissionAction;
 }
@@ -29,9 +30,10 @@ function navigationItem(
   id: NavigationItemId,
   resource: ResourceId,
   action: PermissionAction = "read",
+  href?: NavigationItem["href"],
 ): NavigationItem {
   const targetId = id.replaceAll("_", "-");
-  return { id, targetId, href: `#${targetId}`, resource, action };
+  return { id, targetId, href: href ?? `#${targetId}`, resource, action };
 }
 
 export const navigationItems: readonly NavigationItem[] = [
@@ -40,6 +42,7 @@ export const navigationItems: readonly NavigationItem[] = [
   navigationItem("zebra_labels", "zebra_labels"),
   navigationItem("new_request", "new_request"),
   navigationItem("controlled_medicines", "controlled_medicines"),
+  navigationItem("inventory", "inventory_balance", "read", "/app/inventory"),
 ];
 
 export interface NavigationContext {

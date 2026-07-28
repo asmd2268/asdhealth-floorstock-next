@@ -33,6 +33,7 @@ export default async function AdministrationFeaturesPage() {
               zebra_labels: dictionary.navigation.zebraLabels,
               new_request: dictionary.navigation.newRequest,
               controlled_medicines: dictionary.navigation.controlledMedicines,
+              inventory: dictionary.navigation.inventory,
             },
             enabled: labels.enabled,
             submit: labels.replaceFeatures,

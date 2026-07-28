@@ -106,6 +106,7 @@ const featureFlagsSchema = z
     zebra_labels: z.boolean(),
     new_request: z.boolean(),
     controlled_medicines: z.boolean(),
+    inventory: z.boolean().default(false),
   })
   .strict();
 
