@@ -127,6 +127,23 @@ beforeEach(async () => {
     sessionId: "session-1",
     expiresAtMilliseconds: 1_900_000_000_000,
   });
+  await seed("inventoryItems/item-1", { tenantId });
+  await seed("inventoryLocations/location-1", {
+    tenantId,
+    facilityId: "facility-1",
+  });
+  await seed("inventoryLots/lot-1", { tenantId, facilityId: "facility-1" });
+  await seed("floorStockConfigurations/config-1", {
+    tenantId,
+    facilityId: "facility-1",
+  });
+  await seed("inventoryBalances/balance-1", { tenantId, quantity: 1 });
+  await seed("inventoryTransactions/transaction-1", { tenantId });
+  await seed("inventoryTransactions/transaction-1/lines/line-1", {
+    itemId: "item-1",
+  });
+  await seed("inventoryRequestKeys/request-1", { tenantId });
+  await seed("inventoryAuditEvents/event-1", { tenantId });
 });
 
 afterAll(async () => {
@@ -134,6 +151,28 @@ afterAll(async () => {
 });
 
 describe("Firestore trusted-session rules", () => {
+  it("explicitly denies all browser inventory reads and writes", async () => {
+    const firestore = firestoreFor(activeUid);
+    const paths = [
+      "inventoryItems/item-1",
+      "inventoryLocations/location-1",
+      "inventoryLots/lot-1",
+      "floorStockConfigurations/config-1",
+      "inventoryBalances/balance-1",
+      "inventoryTransactions/transaction-1",
+      "inventoryTransactions/transaction-1/lines/line-1",
+      "inventoryRequestKeys/request-1",
+      "inventoryAuditEvents/event-1",
+    ];
+    for (const target of paths) {
+      await expectExplicitDenial(getDoc(doc(firestore, target)));
+      await expectExplicitDenial(setDoc(doc(firestore, target), { tenantId }));
+      await expectExplicitDenial(deleteDoc(doc(firestore, target)));
+    }
+    await expectExplicitDenial(
+      getDocs(collection(firestore, "inventoryBalances")),
+    );
+  });
   it("denies unauthenticated trusted-record reads", async () => {
     const firestore = firestoreFor();
     await expectExplicitDenial(

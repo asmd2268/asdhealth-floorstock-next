@@ -14,7 +14,12 @@ export const baseBrand: BrandingConfiguration = {
   clientDisplayName: "ASDHealth",
   primaryAccentToken: "#087f8c",
   domain: "localhost",
-  enabledFeatures: ["announcements", "zebra_labels", "new_request"],
+  enabledFeatures: [
+    "announcements",
+    "zebra_labels",
+    "new_request",
+    "inventory",
+  ],
 };
 
 export const demoPlatform: Platform = {
@@ -57,6 +62,7 @@ export const failClosedFeatureFlags: FeatureFlagSet = {
   zebra_labels: false,
   new_request: false,
   controlled_medicines: false,
+  inventory: false,
 };
 
 export function getSafeLogoUrl(logoUrl?: string): string | undefined {

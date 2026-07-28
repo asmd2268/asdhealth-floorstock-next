@@ -1,6 +1,6 @@
 # ASDHealth Floor Stock
 
-ASDHealth Floor Stock is a modular Next.js App Router rebuild for hospital floor stock operations. The current foundation establishes platform identity, tenant boundaries, internationalization, permissions, authentication contracts, and a responsive application shell. It does not connect to production services or implement inventory workflows.
+ASDHealth Floor Stock is a modular Next.js App Router rebuild for hospital floor stock operations. The current foundation establishes platform identity, tenant boundaries, internationalization, permissions, authentication contracts, a responsive application shell, and the first server-protected inventory domain. It does not connect to production services.
 
 The production application at `floorstock-one.vercel.app` is separate and remains untouched by this repository and phase.
 
@@ -19,6 +19,7 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/services/firebase` validates public browser configuration with Zod, lazily initializes one named browser app plus singleton Auth and Firestore boundaries, adapts Firebase identities, and validates trusted session documents before returning application-owned types.
 - `src/server/session` is physically server-only and verifies Firebase ID tokens, reads validated trusted records through Admin adapters, stores opaque revocable sessions, enforces CSRF/origin checks, and re-runs permission checks for protected operations.
 - `src/domain/administration` and `src/server/administration` provide the pure scope-filtering policy, bounded validated read repository, session-to-principal binding, and hardened operation-specific HTTP boundary for the trusted administration console.
+- `src/domain/inventory` defines the medication catalog, hierarchical locations, lots and date-only expiry, exact integer quantities, materialized balances, immutable ledger, and bounded validation contracts. `src/server/inventory` contains transactional posting, trusted-state revalidation, bounded queries, HTTP protection, and the Firebase Admin adapter.
 
 The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md. The server-protected administration console and its authority matrix are documented in docs/trusted-administration-console.md.
 
@@ -74,6 +75,8 @@ Announcements and Zebra labels default to the five confirmed pharmacy/master rol
 
 Controlled medicines currently has typed feature and resource identifiers only. No transfer statuses, stock movement behavior, or final workflow is defined in Phase 1.
 
+Inventory uses a separate `inventory` feature gate plus resource-specific read/manage/receive/issue/adjust/transfer permissions. Navigation remains presentational; each page and operation-specific API independently authorizes the active facility on the server. Posting atomically updates base-unit balances and creates immutable movement lines, a sanitized audit event, and an actor/tenant/operation-scoped idempotency marker. See `docs/inventory-domain-foundation.md` for its trust model, limits, collection model, index assumptions, and deferred scope.
+
 ## Internationalization and branding
 
 English (`ltr`) and Arabic (`rtl`) are centralized in `src/i18n/dictionaries.ts`. The selected locale is restored from a same-site cookie during server rendering, so the initial document language and direction match without a hydration mismatch. The language switcher updates content, document language, direction, alignment, and Arabic typography together.
@@ -94,7 +97,7 @@ Server-session routes additionally require `SERVER_SESSION_ALLOWED_ORIGIN` to be
 
 Firebase validation rejects example placeholders and malformed project, domain, bucket, sender, and app identifiers. Browser initialization uses a named Firebase app and refuses to reuse it if its configuration differs.
 
-Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts reads to the caller’s own active identity and tenant, and defaults all unspecified access to deny. These rules are a checked-in foundation and are not deployed by this work. No Admin credentials are included.
+Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no browser business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts trusted-session reads to the caller’s own active identity and tenant, explicitly denies browser access to inventory records, and defaults unspecified access to deny. The rules and inventory index foundation are checked in but remain undeployed. No Admin credentials are included.
 
 Trusted identifiers use a canonical printable-ASCII format that rejects whitespace, control/format characters, Unicode lookalikes, and path separators. Validation is bounded to 100 facility memberships, 100 explicit overrides, 250 organizations, 2,000 facilities, and 50 role assignments. Assignment queries fetch at most one overflow sentinel, and both the adapter and domain resolver independently verify UID and tenant boundaries.
 
@@ -111,7 +114,8 @@ The trusted administration console is available under `/app/admin` only after th
 - Password reset, registration, multi-factor authentication, and account recovery
 - Production session retention cleanup, global session-management UI, rate limiting, and monitoring
 - Production Firebase configuration or deployment
-- Stock, controlled-medicine, and business collection workflows
+- Floor-stock requests, cabinet/shelf workflows, crash carts, public QR pages, controlled medicines, printing, and deployment
+- Inventory catalog/location/lot provisioning UI, reservation, replenishment, costing, and reporting
 
 ## Local commands
 

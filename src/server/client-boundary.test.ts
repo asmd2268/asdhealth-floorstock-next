@@ -157,4 +157,18 @@ describe("Firebase Admin client boundary", () => {
       "expectedFeatureFlags: body.expectedFeatureFlags",
     );
   });
+
+  it("keeps inventory UI free of trusted scope and server modules", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/inventory/inventory-posting-form.tsx",
+      ),
+      "utf8",
+    );
+    expect(source).not.toMatch(
+      /tenantId|organizationId|facilityId|roleAssignments|featureFlags|explicitPermissionOverrides|trustedStateFingerprint|firebase-admin|@\/server\//,
+    );
+    expect(source).not.toMatch(/localStorage|sessionStorage|customClaims/);
+  });
 });

@@ -38,6 +38,7 @@ const navigationIcons: Record<NavigationItemId, typeof GridIcon> = {
   zebra_labels: TagIcon,
   new_request: FilePlusIcon,
   controlled_medicines: ShieldIcon,
+  inventory: BuildingIcon,
 };
 
 const navigationLabels = {
@@ -46,6 +47,7 @@ const navigationLabels = {
   zebra_labels: "zebraLabels",
   new_request: "newRequest",
   controlled_medicines: "controlledMedicines",
+  inventory: "inventory",
 } as const;
 
 const moduleDescriptions = {
@@ -53,6 +55,7 @@ const moduleDescriptions = {
   zebra_labels: "zebraLabelsDescription",
   new_request: "newRequestDescription",
   controlled_medicines: "controlledMedicinesDescription",
+  inventory: "inventoryDescription",
 } as const;
 
 export type ShellBrandingConfiguration = Pick<
@@ -67,7 +70,7 @@ export type ShellBrandingConfiguration = Pick<
 export interface ShellNavigationItem {
   id: NavigationItemId;
   targetId: string;
-  href: `#${string}`;
+  href: `#${string}` | `/app/${string}`;
 }
 
 type ModuleNavigationItem = ShellNavigationItem & {

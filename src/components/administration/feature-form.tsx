@@ -13,6 +13,7 @@ const featureIds = [
   "zebra_labels",
   "new_request",
   "controlled_medicines",
+  "inventory",
 ] as const;
 
 export function FeatureForm({

@@ -58,6 +58,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Inventory is server-mediated. Catalog, hierarchy, materialized balances,
+    // immutable ledgers, audit events, and request keys are never browser writable.
+    match /inventoryItems/{documentId} { allow read, write: if false; }
+    match /inventoryLocations/{documentId} { allow read, write: if false; }
+    match /inventoryLots/{documentId} { allow read, write: if false; }
+    match /floorStockConfigurations/{documentId} { allow read, write: if false; }
+    match /inventoryBalances/{documentId} { allow read, write: if false; }
+    match /inventoryTransactions/{transactionId} {
+      allow read, write: if false;
+      match /lines/{lineId} { allow read, write: if false; }
+    }
+    match /inventoryRequestKeys/{namespaceId} { allow read, write: if false; }
+    match /inventoryAuditEvents/{eventId} { allow read, write: if false; }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -3,6 +3,7 @@ export const featureIds = [
   "zebra_labels",
   "new_request",
   "controlled_medicines",
+  "inventory",
 ] as const;
 
 export type FeatureId = (typeof featureIds)[number];

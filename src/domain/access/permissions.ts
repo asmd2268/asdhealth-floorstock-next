@@ -24,6 +24,7 @@ export const featureResources: Readonly<Record<FeatureId, ResourceId>> = {
   zebra_labels: "zebra_labels",
   new_request: "new_request",
   controlled_medicines: "controlled_medicines",
+  inventory: "inventory_stock",
 };
 
 export const resourceFeatures: Readonly<Record<ResourceId, FeatureId | null>> =
@@ -33,6 +34,11 @@ export const resourceFeatures: Readonly<Record<ResourceId, FeatureId | null>> =
     zebra_labels: "zebra_labels",
     new_request: "new_request",
     controlled_medicines: "controlled_medicines",
+    inventory_item: "inventory",
+    inventory_location: "inventory",
+    inventory_stock: "inventory",
+    inventory_balance: "inventory",
+    inventory_transaction: "inventory",
   };
 
 const sharedPharmacyRoles = [
@@ -66,6 +72,64 @@ export const roleDefaults: RoleDefaults = Object.freeze({
   department_user: {
     dashboard: ["read"],
     new_request: ["read", "create"],
+  },
+  master: {
+    dashboard: ["read"],
+    announcements: ["read"],
+    zebra_labels: ["read"],
+    inventory_item: ["read", "manage"],
+    inventory_location: ["read", "manage"],
+    inventory_stock: ["read", "receive", "issue", "adjust", "transfer"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
+  },
+  pharmacy_manager: {
+    dashboard: ["read"],
+    announcements: ["read"],
+    zebra_labels: ["read"],
+    inventory_item: ["read", "manage"],
+    inventory_location: ["read", "manage"],
+    inventory_stock: ["read", "receive", "issue", "adjust", "transfer"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
+  },
+  pharmacy_supervisor: {
+    dashboard: ["read"],
+    announcements: ["read"],
+    zebra_labels: ["read"],
+    inventory_item: ["read"],
+    inventory_location: ["read"],
+    inventory_stock: ["read", "receive", "issue", "adjust", "transfer"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
+  },
+  pharmacy_staff: {
+    dashboard: ["read"],
+    announcements: ["read"],
+    zebra_labels: ["read"],
+    inventory_item: ["read"],
+    inventory_location: ["read"],
+    inventory_stock: ["read", "receive", "issue"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
+  },
+  controlled_drugs_officer: {
+    dashboard: ["read"],
+    announcements: ["read"],
+    zebra_labels: ["read"],
+    inventory_item: ["read"],
+    inventory_location: ["read"],
+    inventory_stock: ["read", "receive", "issue", "adjust", "transfer"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
+  },
+  warehouse_manager: {
+    dashboard: ["read"],
+    inventory_item: ["read"],
+    inventory_location: ["read"],
+    inventory_stock: ["read", "receive", "issue", "adjust", "transfer"],
+    inventory_balance: ["read"],
+    inventory_transaction: ["read"],
   },
 });
 

@@ -39,6 +39,57 @@ const pharmacyFeatureRoles: readonly RoleId[] = [
 ];
 
 describe("permission resolution", () => {
+  it("gates every inventory resource and denies external supervisors", () => {
+    for (const resource of [
+      "inventory_item",
+      "inventory_location",
+      "inventory_stock",
+      "inventory_balance",
+      "inventory_transaction",
+    ] as const) {
+      expect(
+        can({
+          ...baseRequest,
+          resource,
+          action: resource === "inventory_stock" ? "receive" : "read",
+          featureFlags: { inventory: false },
+        }),
+      ).toBe(false);
+      expect(
+        can({
+          ...baseRequest,
+          role: "department_user",
+          resource,
+          action: "read",
+          featureFlags: { inventory: true },
+        }),
+      ).toBe(false);
+      expect(
+        can({
+          ...baseRequest,
+          role: "external_pharmacy_supervisor",
+          resource,
+          action: "read",
+          featureFlags: { inventory: true },
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it("preserves explicit deny precedence for inventory posting", () => {
+    expect(
+      resolvePermission({
+        ...baseRequest,
+        resource: "inventory_stock",
+        action: "receive",
+        featureFlags: { inventory: true },
+        overrides: [
+          { effect: "allow", resource: "inventory_stock", action: "receive" },
+          { effect: "deny", resource: "inventory_stock", action: "receive" },
+        ],
+      }),
+    ).toEqual({ allowed: false, reason: "explicit_deny" });
+  });
   it.each(pharmacyFeatureRoles)(
     "allows announcements for %s by default",
     (role) => {

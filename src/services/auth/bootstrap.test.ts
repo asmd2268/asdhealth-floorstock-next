@@ -83,6 +83,7 @@ describe("authentication bootstrap", () => {
       zebra_labels: true,
       new_request: true,
       controlled_medicines: false,
+      inventory: false,
     });
     expect(bootstrap.demoEnabled).toBe(true);
     expect(production.resolve).not.toHaveBeenCalled();
