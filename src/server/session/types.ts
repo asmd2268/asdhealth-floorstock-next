@@ -27,9 +27,10 @@ export interface VerifiedFirebaseIdentity {
 }
 
 export interface ServerSessionRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   sessionId: string;
   uid: string;
+  activeFacilityId: string;
   credentialHash: string;
   firebaseAuthTimeSeconds: number;
   createdAtMilliseconds: number;
@@ -48,8 +49,18 @@ export interface ServerSessionRotationCandidate {
   credentialHash: string;
 }
 
+export interface ServerSessionRotationAuthorization {
+  identity: ProviderIdentity;
+  tenantId: string;
+  activeFacilityId: string;
+  trustedStateFingerprint: string;
+}
+
 export type ServerSessionCreationResult =
   "created" | "replayed" | "rotation_conflict";
+
+export type ServerSessionRotationResult =
+  "created" | "rotation_conflict" | "authorization_conflict";
 
 export interface ServerSessionStore {
   get(sessionId: string): Promise<ServerSessionRecord | null>;
@@ -59,6 +70,12 @@ export interface ServerSessionStore {
     rotation: ServerSessionRotationCandidate | null,
     revokedAtMilliseconds: number,
   ): Promise<ServerSessionCreationResult>;
+  rotate(
+    record: ServerSessionRecord,
+    rotation: ServerSessionRotationCandidate,
+    authorization: ServerSessionRotationAuthorization,
+    revokedAtMilliseconds: number,
+  ): Promise<ServerSessionRotationResult>;
   revoke(sessionId: string, revokedAtMilliseconds: number): Promise<void>;
 }
 
@@ -82,7 +99,10 @@ export interface FirebaseServerIdentityVerifier {
 }
 
 export interface ServerTrustedSessionResolver {
-  resolveIdentity(identity: ProviderIdentity): Promise<SessionResolutionResult>;
+  resolveIdentity(
+    identity: ProviderIdentity,
+    requestedActiveFacilityId?: string,
+  ): Promise<SessionResolutionResult>;
 }
 
 export interface ResolvedServerSession {
@@ -104,6 +124,10 @@ export interface CreatedServerSession {
   expiresAtMilliseconds: number;
 }
 
+export interface SwitchedServerSession extends CreatedServerSession {
+  activeFacilityId: string;
+}
+
 export interface ServerSessionService {
   create(
     idToken: string,
@@ -116,5 +140,9 @@ export interface ServerSessionService {
     cookieValue: string | undefined,
     permission: ProtectedPermission,
   ): Promise<ServerSessionResult<ResolvedServerSession>>;
+  switchFacility(
+    cookieValue: string | undefined,
+    requestedFacilityId: string,
+  ): Promise<ServerSessionResult<SwitchedServerSession>>;
   revoke(cookieValue: string | undefined): Promise<ServerSessionResult<null>>;
 }

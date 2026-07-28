@@ -21,6 +21,11 @@ import type {
   ServerTrustedSessionResolver,
 } from "./types";
 import { SERVER_SESSION_LIFETIME_SECONDS } from "./types";
+import {
+  fingerprintTrustedAuthorization,
+  hasTrustedFacilityShellAccess,
+} from "./trusted-authorization";
+import { parseActiveFacilityId } from "./validation";
 
 const MAX_ID_TOKEN_AGE_SECONDS = 5 * 60;
 const CLOCK_SKEW_SECONDS = 60;
@@ -87,6 +92,7 @@ export function createServerSessionService(
 
       const trusted = await dependencies.trustedSessions.resolveIdentity(
         currentIdentity.identity,
+        record.activeFacilityId,
       );
       if (!trusted.ok) {
         return failed(
@@ -95,11 +101,25 @@ export function createServerSessionService(
             : "forbidden",
         );
       }
+      if (!hasActiveFacilityContext(trusted, record.activeFacilityId)) {
+        return failed("forbidden");
+      }
       return { ok: true, value: { record, trusted } };
     } catch {
       return failed("provider_unavailable");
     }
   };
+
+  const hasActiveFacilityContext = (
+    trusted: Extract<
+      Awaited<ReturnType<ServerTrustedSessionResolver["resolveIdentity"]>>,
+      { ok: true }
+    >,
+    expectedFacilityId = trusted.user.activeFacilityId,
+  ): boolean =>
+    trusted.user.activeFacilityId === expectedFacilityId &&
+    trusted.user.activeScope.kind === "facility" &&
+    trusted.user.activeScope.facilityId === expectedFacilityId;
 
   return {
     async create(idToken, previousCookieValue) {
@@ -120,8 +140,30 @@ export function createServerSessionService(
           return failed("unauthenticated");
         }
 
+        let rotation: ServerSessionRotationCandidate | null = null;
+        let preservedActiveFacilityId: string | undefined;
+        const previousCredential = parseSessionCredential(previousCookieValue);
+        if (previousCredential) {
+          const previous = await resolveStoredCredential(previousCookieValue);
+          if (!previous.ok && previous.code === "provider_unavailable") {
+            return failed("provider_unavailable");
+          }
+          if (
+            previous.ok &&
+            previous.value.uid === verified.identity.identity.uid
+          ) {
+            rotation = {
+              sessionId: previous.value.sessionId,
+              uid: previous.value.uid,
+              credentialHash: previous.value.credentialHash,
+            };
+            preservedActiveFacilityId = previous.value.activeFacilityId;
+          }
+        }
+
         const trusted = await dependencies.trustedSessions.resolveIdentity(
           verified.identity.identity,
+          preservedActiveFacilityId,
         );
         if (!trusted.ok) {
           return failed(
@@ -130,46 +172,24 @@ export function createServerSessionService(
               : "forbidden",
           );
         }
-        const shellAccess = resolveScopedPermission({
-          roleAssignments: trusted.user.roleAssignments,
-          resource: "dashboard",
-          action: "read",
-          subjectScope: trusted.user.activeScope,
-          targetScope: trusted.user.activeScope,
-          featureFlags: trusted.featureFlags,
-          overrides: trusted.user.explicitPermissionOverrides,
-        });
-        if (!shellAccess.allowed) return failed("forbidden");
+        if (
+          !hasActiveFacilityContext(trusted) ||
+          (preservedActiveFacilityId !== undefined &&
+            trusted.user.activeFacilityId !== preservedActiveFacilityId)
+        ) {
+          return failed("forbidden");
+        }
+        if (!hasTrustedFacilityShellAccess(trusted)) return failed("forbidden");
 
         const credential = createServerSessionCredential();
         const expiresAtMilliseconds =
           nowMilliseconds + SERVER_SESSION_LIFETIME_SECONDS * 1000;
-        let rotation: ServerSessionRotationCandidate | null = null;
-        const previousCredential = parseSessionCredential(previousCookieValue);
-        if (previousCredential) {
-          const previousRecord = await dependencies.store.get(
-            previousCredential.sessionId,
-          );
-          if (
-            previousRecord &&
-            previousRecord.uid === verified.identity.identity.uid &&
-            sessionSecretMatches(
-              previousCredential.secret,
-              previousRecord.credentialHash,
-            )
-          ) {
-            rotation = {
-              sessionId: previousRecord.sessionId,
-              uid: previousRecord.uid,
-              credentialHash: previousRecord.credentialHash,
-            };
-          }
-        }
         const stored = await dependencies.store.create(
           {
-            schemaVersion: 1,
+            schemaVersion: 2,
             sessionId: credential.sessionId,
             uid: verified.identity.identity.uid,
+            activeFacilityId: trusted.user.activeFacilityId,
             credentialHash: hashSessionSecret(credential.secret),
             firebaseAuthTimeSeconds: verified.identity.authTimeSeconds,
             createdAtMilliseconds: nowMilliseconds,
@@ -213,6 +233,92 @@ export function createServerSessionService(
         overrides: user.explicitPermissionOverrides,
       });
       return decision.allowed ? session : failed("forbidden");
+    },
+
+    async switchFacility(cookieValue, requestedFacilityId) {
+      let facilityId: string;
+      try {
+        facilityId = parseActiveFacilityId(requestedFacilityId);
+      } catch {
+        return { ok: false, code: "invalid_request" };
+      }
+
+      const stored = await resolveStoredCredential(cookieValue);
+      if (!stored.ok) return stored;
+      try {
+        const previous = stored.value;
+        const currentIdentity =
+          await dependencies.identityVerifier.resolveCurrentIdentity(
+            previous.uid,
+            previous.firebaseAuthTimeSeconds,
+          );
+        if (!currentIdentity.ok) return failed(currentIdentity.code);
+        if (currentIdentity.identity.uid !== previous.uid) {
+          return failed("forbidden");
+        }
+
+        const trusted = await dependencies.trustedSessions.resolveIdentity(
+          currentIdentity.identity,
+          facilityId,
+        );
+        if (!trusted.ok) {
+          return failed(
+            trusted.failure.category === "provider_error"
+              ? "provider_unavailable"
+              : "forbidden",
+          );
+        }
+        if (!hasActiveFacilityContext(trusted, facilityId)) {
+          return failed("forbidden");
+        }
+        if (!hasTrustedFacilityShellAccess(trusted, facilityId)) {
+          return failed("forbidden");
+        }
+
+        const credential = createServerSessionCredential();
+        const rotatedAtMilliseconds = now();
+        if (previous.expiresAtMilliseconds <= rotatedAtMilliseconds) {
+          return failed("unauthenticated");
+        }
+        const rotated = await dependencies.store.rotate(
+          {
+            schemaVersion: 2,
+            sessionId: credential.sessionId,
+            uid: previous.uid,
+            activeFacilityId: trusted.user.activeFacilityId,
+            credentialHash: hashSessionSecret(credential.secret),
+            firebaseAuthTimeSeconds: previous.firebaseAuthTimeSeconds,
+            createdAtMilliseconds: rotatedAtMilliseconds,
+            expiresAtMilliseconds: previous.expiresAtMilliseconds,
+            revokedAtMilliseconds: null,
+          },
+          {
+            sessionId: previous.sessionId,
+            uid: previous.uid,
+            credentialHash: previous.credentialHash,
+          },
+          {
+            identity: currentIdentity.identity,
+            tenantId: trusted.user.tenantId,
+            activeFacilityId: trusted.user.activeFacilityId,
+            trustedStateFingerprint: fingerprintTrustedAuthorization(trusted),
+          },
+          rotatedAtMilliseconds,
+        );
+        if (rotated === "authorization_conflict") return failed("forbidden");
+        if (rotated !== "created") return failed("unauthenticated");
+
+        return {
+          ok: true,
+          value: {
+            activeFacilityId: trusted.user.activeFacilityId,
+            cookieValue: serializeSessionCredential(credential),
+            expiresAtMilliseconds: previous.expiresAtMilliseconds,
+          },
+        };
+      } catch {
+        return failed("provider_unavailable");
+      }
     },
 
     async revoke(cookieValue) {

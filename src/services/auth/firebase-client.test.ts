@@ -34,6 +34,7 @@ describe("production Firebase session composition", () => {
     };
     const transport: BrowserServerSessionTransport = {
       create: vi.fn().mockResolvedValue({ ok: true }),
+      switchFacility: vi.fn(),
       revoke: vi.fn(),
     };
     const established = vi.fn();

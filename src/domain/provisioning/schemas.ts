@@ -14,6 +14,15 @@ export const provisioningIdentifierSchema = z
     "Expected a canonical trusted identifier.",
   );
 
+const safeDisplayNameSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .refine(
+    (value) => value === value.trim() && !/\p{C}/u.test(value),
+    "Expected a bounded display name without surrounding whitespace or control characters.",
+  );
+
 const platformScopeSchema = z
   .object({
     kind: z.literal("platform"),
@@ -69,6 +78,7 @@ const facilitySchema = z
   .object({
     id: provisioningIdentifierSchema,
     organizationId: provisioningIdentifierSchema,
+    displayName: safeDisplayNameSchema.optional(),
   })
   .strict();
 

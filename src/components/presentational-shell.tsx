@@ -102,6 +102,7 @@ function useMobileViewport(): boolean {
 
 export interface PresentationalShellProps {
   activeFacilityId: string;
+  activeFacilityName?: string;
   branding: ShellBrandingConfiguration;
   contextLabel: string;
   navigation: readonly ShellNavigationItem[];
@@ -114,6 +115,7 @@ export interface PresentationalShellProps {
 export function PresentationalShell({
   additionalControls,
   activeFacilityId,
+  activeFacilityName = activeFacilityId,
   branding,
   contextLabel,
   navigation,
@@ -220,7 +222,7 @@ export function PresentationalShell({
           <BuildingIcon />
           <span>
             <small>{dictionary.shell.facilityContext}</small>
-            <strong>{activeFacilityId}</strong>
+            <strong>{activeFacilityName}</strong>
           </span>
         </div>
 

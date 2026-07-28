@@ -6,6 +6,7 @@ import {
   handleCreateSessionRequest,
   handleDeleteSessionRequest,
   handleProtectedApiRequest,
+  handleSwitchFacilityRequest,
 } from "./http";
 
 const origin = "https://floorstock.asdhealth.example";
@@ -22,6 +23,14 @@ function service(): ServerSessionService {
     }),
     resolve: vi.fn(),
     authorize: vi.fn().mockResolvedValue({ ok: false, code: "forbidden" }),
+    switchFacility: vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        activeFacilityId: "facility-2",
+        cookieValue,
+        expiresAtMilliseconds: 1_900_000_000_000,
+      },
+    }),
     revoke: vi.fn().mockResolvedValue({ ok: true, value: null }),
   };
 }
@@ -39,6 +48,40 @@ function createRequest(
       ...headers,
     },
     body: JSON.stringify(body),
+  });
+}
+
+function switchRequest(
+  headers: Record<string, string> = {},
+  body: unknown = { facilityId: "facility-2" },
+) {
+  const serialized = JSON.stringify(body);
+  return new Request(origin + "/api/auth/session/facility", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(new TextEncoder().encode(serialized).byteLength),
+      origin,
+      "sec-fetch-site": "same-origin",
+      "x-asdhealth-session-action": "switch-facility",
+      ...headers,
+    },
+    body: serialized,
+  });
+}
+
+function rawSwitchRequest(body: string, headers: Record<string, string> = {}) {
+  return new Request(origin + "/api/auth/session/facility", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(new TextEncoder().encode(body).byteLength),
+      origin,
+      "sec-fetch-site": "same-origin",
+      "x-asdhealth-session-action": "switch-facility",
+      ...headers,
+    },
+    body,
   });
 }
 
@@ -230,5 +273,214 @@ describe("server session HTTP boundary", () => {
     expect(await response.text()).toBe(
       JSON.stringify({ ok: false, error: { code: "forbidden" } }),
     );
+  });
+
+  it("rotates a facility session and returns only sanitized context with the absolute expiry", async () => {
+    const boundary = service();
+    const result = await handleSwitchFacilityRequest(
+      switchRequest(),
+      cookieValue,
+      boundary,
+      origin,
+      true,
+      () => 1_899_999_990_000,
+    );
+    expect(boundary.switchFacility).toHaveBeenCalledWith(
+      cookieValue,
+      "facility-2",
+    );
+    expect(await result.response.json()).toEqual({
+      ok: true,
+      facility: { id: "facility-2" },
+    });
+    expect(result.response.headers.get("cache-control")).toBe("no-store");
+    expect(result.cookie).toMatchObject({
+      name: "__Host-asdhealth_session",
+      value: cookieValue,
+      options: {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: true,
+        path: "/",
+        maxAge: 10,
+        expires: new Date(1_900_000_000_000),
+        priority: "high",
+      },
+    });
+    expect(result.cookie?.options).not.toHaveProperty("domain");
+  });
+
+  it("rejects malformed targets and normalized authorization failures without enumeration", async () => {
+    const boundary = service();
+    const malformed = await handleSwitchFacilityRequest(
+      switchRequest({}, { facilityId: "../tenant-2/facility" }),
+      cookieValue,
+      boundary,
+      origin,
+      false,
+    );
+    expect(malformed.response.status).toBe(400);
+    expect(await malformed.response.json()).toEqual({
+      ok: false,
+      error: { code: "invalid_request" },
+    });
+
+    vi.mocked(boundary.switchFacility).mockResolvedValueOnce({
+      ok: false,
+      code: "forbidden",
+    });
+    const forbidden = await handleSwitchFacilityRequest(
+      switchRequest(),
+      cookieValue,
+      boundary,
+      origin,
+      false,
+    );
+    const forbiddenBody = await forbidden.response.json();
+    expect(forbiddenBody).toEqual({
+      ok: false,
+      error: { code: "forbidden" },
+    });
+    expect(JSON.stringify(forbiddenBody)).not.toContain("facility-2");
+    expect(forbidden.clearCookie).toBeUndefined();
+  });
+
+  it("enforces Origin, Fetch Metadata, and the operation-specific CSRF header", async () => {
+    const boundary = service();
+    for (const request of [
+      switchRequest({ origin: "https://attacker.example" }),
+      switchRequest({ origin: `${origin}, ${origin}` }),
+      switchRequest({ origin: `${origin}/path` }),
+      switchRequest({ origin: "null" }),
+      switchRequest({ origin: "" }),
+      switchRequest({ "sec-fetch-site": "cross-site" }),
+      switchRequest({ "x-asdhealth-session-action": "sign-out" }),
+    ]) {
+      const result = await handleSwitchFacilityRequest(
+        request,
+        cookieValue,
+        boundary,
+        origin,
+        false,
+      );
+      expect(result.response.status).toBe(403);
+    }
+    expect(boundary.switchFacility).not.toHaveBeenCalled();
+  });
+
+  it("requires strict JSON type, exact declared length, and a bounded body", async () => {
+    const boundary = service();
+    const validBody = JSON.stringify({ facilityId: "facility-2" });
+    for (const request of [
+      new Request(origin + "/api/auth/session/facility", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+          "sec-fetch-site": "same-origin",
+          "x-asdhealth-session-action": "switch-facility",
+        },
+        body: validBody,
+      }),
+      switchRequest({ "content-type": "text/plain" }),
+      switchRequest({ "content-length": "1, 2" }),
+      switchRequest({ "content-length": "1" }),
+      switchRequest({}, { facilityId: "f".repeat(12_289) }),
+    ]) {
+      const result = await handleSwitchFacilityRequest(
+        request,
+        cookieValue,
+        boundary,
+        origin,
+        false,
+      );
+      expect(result.response.status).toBe(400);
+    }
+    expect(boundary.switchFacility).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate or escaped-duplicate JSON keys and trailing content", async () => {
+    const boundary = service();
+    for (const body of [
+      '{"facilityId":"facility-1","facilityId":"facility-2"}',
+      '{"facilityId":"facility-1","facility\\u0049d":"facility-2"}',
+      '{"facilityId":"facility-2"}true',
+    ]) {
+      const result = await handleSwitchFacilityRequest(
+        rawSwitchRequest(body),
+        cookieValue,
+        boundary,
+        origin,
+        false,
+      );
+      expect(result.response.status).toBe(400);
+    }
+    expect(boundary.switchFacility).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-canonical and overflow Content-Length values", async () => {
+    const boundary = service();
+    for (const contentLength of [
+      "-1",
+      "+1",
+      "1.0",
+      "1e2",
+      "1, 2",
+      "01",
+      "1 2",
+      "9".repeat(400),
+      String(12_289),
+    ]) {
+      const result = await handleSwitchFacilityRequest(
+        switchRequest({ "content-length": contentLength }),
+        cookieValue,
+        boundary,
+        origin,
+        false,
+      );
+      expect(result.response.status).toBe(400);
+    }
+    expect(boundary.switchFacility).not.toHaveBeenCalled();
+  });
+
+  it("compares declared lengths as UTF-8 bytes", async () => {
+    const boundary = service();
+    const body = JSON.stringify({ idToken: "tøken" });
+    const request = new Request(origin + "/api/auth/session", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(new TextEncoder().encode(body).byteLength),
+        origin,
+        "sec-fetch-site": "same-origin",
+      },
+      body,
+    });
+    const result = await handleCreateSessionRequest(
+      request,
+      undefined,
+      boundary,
+      origin,
+      false,
+    );
+    expect(result.response.status).toBe(201);
+    expect(boundary.create).toHaveBeenCalledWith("tøken", undefined);
+  });
+
+  it("clears an invalid switched session with matching cookie attributes", async () => {
+    const boundary = service();
+    vi.mocked(boundary.switchFacility).mockResolvedValue({
+      ok: false,
+      code: "unauthenticated",
+    });
+    const result = await handleSwitchFacilityRequest(
+      switchRequest(),
+      cookieValue,
+      boundary,
+      origin,
+      true,
+    );
+    expect(result.clearCookie).toEqual(createClearSessionCookie(true));
+    expect(result.response.status).toBe(401);
   });
 });

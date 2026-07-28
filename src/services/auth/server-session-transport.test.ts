@@ -44,4 +44,23 @@ describe("browser server-session transport", () => {
       headers: { "x-asdhealth-session-action": "sign-out" },
     });
   });
+
+  it("sends only the requested facility to the operation-specific switch endpoint", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    await expect(
+      createBrowserServerSessionTransport(fetcher).switchFacility("facility-2"),
+    ).resolves.toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith("/api/auth/session/facility", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "content-type": "application/json",
+        "x-asdhealth-session-action": "switch-facility",
+      },
+      body: JSON.stringify({ facilityId: "facility-2" }),
+      keepalive: true,
+    });
+  });
 });

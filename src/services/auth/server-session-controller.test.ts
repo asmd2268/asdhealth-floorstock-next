@@ -30,6 +30,7 @@ function harness() {
   };
   const transport: BrowserServerSessionTransport = {
     create: vi.fn().mockResolvedValue({ ok: true }),
+    switchFacility: vi.fn(),
     revoke: vi.fn(),
   };
   return {

@@ -29,6 +29,7 @@ export interface SessionResolverInput {
   profile: UserProfileRecord | null;
   roleAssignments: readonly RoleAssignmentRecord[];
   tenantDirectory: TenantDirectory | null;
+  requestedActiveFacilityId?: string;
 }
 
 function denied(reason: SessionFailureReason): SessionResolutionResult {
@@ -180,7 +181,13 @@ function validateOverrides(
 export function resolveSession(
   input: SessionResolverInput,
 ): SessionResolutionResult {
-  const { identity, profile, roleAssignments, tenantDirectory } = input;
+  const {
+    identity,
+    profile,
+    requestedActiveFacilityId,
+    roleAssignments,
+    tenantDirectory,
+  } = input;
   if (!identity) return denied("unauthenticated");
   if (!profile) return denied("profile_not_found");
   if (profile.uid !== identity.uid) return denied("identity_mismatch");
@@ -202,6 +209,21 @@ export function resolveSession(
   }
   if (tenantDirectory.status !== "active") return denied("tenant_inactive");
 
+  const directoryOrganizationIds = tenantDirectory.organizations.map(
+    (organization) => organization.id,
+  );
+  if (
+    new Set(directoryOrganizationIds).size !== directoryOrganizationIds.length
+  ) {
+    return denied("organization_mismatch");
+  }
+  const directoryFacilityIds = tenantDirectory.facilities.map(
+    (facility) => facility.id,
+  );
+  if (new Set(directoryFacilityIds).size !== directoryFacilityIds.length) {
+    return denied("facility_mismatch");
+  }
+
   const featureFlags = resolveFeatureFlags(tenantDirectory.featureFlags);
   if (!featureFlags) return denied("feature_flags_missing");
 
@@ -215,19 +237,41 @@ export function resolveSession(
     return denied("organization_mismatch");
   }
 
-  const uniqueFacilityIds = [...new Set(profile.facilityIds)].sort();
+  if (new Set(profile.facilityIds).size !== profile.facilityIds.length) {
+    return denied("facility_mismatch");
+  }
+  const uniqueFacilityIds = [...profile.facilityIds].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
   for (const facilityId of uniqueFacilityIds) {
     const facility = tenantDirectory.facilities.find(
       (candidate) => candidate.id === facilityId,
     );
     if (!facility) return denied("facility_mismatch");
+    if (
+      !tenantDirectory.organizations.some(
+        (organization) => organization.id === facility.organizationId,
+      )
+    ) {
+      return denied("facility_mismatch");
+    }
     if (organizationId && facility.organizationId !== organizationId) {
       return denied("facility_mismatch");
     }
   }
 
+  if (
+    profile.activeFacilityId !== null &&
+    profile.activeFacilityId !== undefined &&
+    !uniqueFacilityIds.includes(profile.activeFacilityId)
+  ) {
+    return denied("active_facility_invalid");
+  }
   const activeFacilityId =
-    profile.activeFacilityId ?? uniqueFacilityIds.at(0) ?? null;
+    requestedActiveFacilityId ??
+    profile.activeFacilityId ??
+    uniqueFacilityIds.at(0) ??
+    null;
   if (!activeFacilityId || !uniqueFacilityIds.includes(activeFacilityId)) {
     return denied("active_facility_invalid");
   }
