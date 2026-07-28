@@ -34,18 +34,20 @@ Restricted tenant administrators may administer only users, roles, overrides, an
 
 Administrator records are not managed by the public API and browser clients cannot read or write them.
 
+The server-session-backed console uses the same service with transactional principal revalidation enabled. The transaction re-reads `provisioningAdministrators/{actorUid}` and requires it to match the just-resolved principal, so stale removal or scope changes fail before any target or audit write. Tenant administrators are also forbidden from changing profiles, account status, membership, or roles for any user who has an administrator-principal record. See `trusted-administration-console.md`.
+
 ### Authorization matrix
 
-| Action                       | Platform owner | Unrestricted tenant admin | Restricted tenant admin                                    |
-| ---------------------------- | -------------- | ------------------------- | ---------------------------------------------------------- |
-| Create tenant                | Same platform  | Denied                    | Denied                                                     |
-| Add/update facility          | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
-| Create/update profile        | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
-| Activate/deactivate account  | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
-| Assign/revoke role           | Same platform  | Own active tenant         | Own active tenant and assigned organization/facility rules |
-| Replace tenant feature flags | Same platform  | Own active tenant         | Denied                                                     |
+| Action                       | Platform owner                                   | Unrestricted tenant admin | Restricted tenant admin                                    |
+| ---------------------------- | ------------------------------------------------ | ------------------------- | ---------------------------------------------------------- |
+| Create tenant                | Same platform                                    | Denied                    | Denied                                                     |
+| Add/update facility          | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Create/update profile        | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Activate/deactivate account  | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Assign/revoke role           | Same platform; assignment requires active tenant | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Replace tenant feature flags | Same platform                                    | Own active tenant         | Denied                                                     |
 
-Platform-owner access to inactive tenants is intentional for every same-platform action above except tenant creation, which always creates a new active tenant. Tenant administrators are denied for every operation unless their directory is active.
+Platform-owner maintenance access to inactive tenants remains intentional, but new role assignment is denied until the tenant is active; tenant creation always creates a new active tenant. Tenant administrators are denied for every operation unless their directory is active.
 
 ## Operations and routes
 
@@ -60,6 +62,8 @@ Each route exposes one typed operation rather than a generic document writer:
 - PUT /api/trusted-provisioning/tenants/{tenantId}/feature-flags
 
 All path parameters, bodies, trusted records, roles, scopes, statuses, and features are validated before writes. Existing canonical identifier rules and trusted-session collection limits apply. Parent tenant, organization, facility, and profile records must already exist where required. Identity and tenant fields are immutable.
+
+The console adds a transactional membership operation which changes only organization IDs, facility IDs, and the active facility while preserving account status and explicit permission overrides. Semantic duplicate role assignments are rejected even when a caller proposes a different assignment document ID.
 
 ## Transactions and audit
 
@@ -101,7 +105,6 @@ The checked-in rules and adapters remain undeployed.
 
 ## Intentionally deferred
 
-- general administrator UI;
 - administrator-principal provisioning and break-glass tooling;
 - multi-party approval workflows;
 - audit export, retention, and SIEM integration;

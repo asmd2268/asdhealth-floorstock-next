@@ -8,10 +8,21 @@ import {
 import { getFirebaseAdminProvisioningStore } from "../firebase-admin/provisioning-store";
 
 let trustedProvisioningService: TrustedProvisioningService | undefined;
+let administrationProvisioningService: TrustedProvisioningService | undefined;
 
 export function getTrustedProvisioningService(): TrustedProvisioningService {
   trustedProvisioningService ??= createTrustedProvisioningService(
     getFirebaseAdminProvisioningStore(),
   );
   return trustedProvisioningService;
+}
+
+export function getAdministrationProvisioningService(): TrustedProvisioningService {
+  administrationProvisioningService ??= createTrustedProvisioningService(
+    getFirebaseAdminProvisioningStore(),
+    () => new Date(),
+    undefined,
+    { revalidatePrincipal: true },
+  );
+  return administrationProvisioningService;
 }

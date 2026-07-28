@@ -1,4 +1,8 @@
 import type { RoleId } from "@/domain/access/types";
+import type {
+  AdministrativeAction,
+  ProvisioningAuditEvent,
+} from "@/domain/provisioning/types";
 
 export const locales = ["en", "ar"] as const;
 export type Locale = (typeof locales)[number];
@@ -78,6 +82,68 @@ export interface Dictionary {
     zebraLabelsDescription: string;
     newRequestDescription: string;
     controlledMedicinesDescription: string;
+  };
+  administration: {
+    title: string;
+    subtitle: string;
+    backToApp: string;
+    language: string;
+    overview: string;
+    users: string;
+    facilities: string;
+    features: string;
+    audit: string;
+    accessDenied: string;
+    unavailable: string;
+    empty: string;
+    tenant: string;
+    scope: string;
+    uid: string;
+    organization: string;
+    facility: string;
+    facilitiesLabel: string;
+    activeFacility: string;
+    accountStatus: string;
+    active: string;
+    disabled: string;
+    pending: string;
+    suspended: string;
+    details: string;
+    roles: string;
+    role: string;
+    assignmentScope: string;
+    assign: string;
+    revoke: string;
+    membership: string;
+    save: string;
+    saving: string;
+    activate: string;
+    deactivate: string;
+    confirmDeactivate: string;
+    cancel: string;
+    facilityId: string;
+    displayName: string;
+    createOrUpdate: string;
+    enabled: string;
+    disabledFlag: string;
+    replaceFeatures: string;
+    event: string;
+    actor: string;
+    target: string;
+    timestamp: string;
+    next: string;
+    success: string;
+    mutationError: string;
+    dashboardDescription: string;
+    usersDescription: string;
+    facilitiesDescription: string;
+    featuresDescription: string;
+    auditDescription: string;
+    platformOwner: string;
+    unrestrictedAdmin: string;
+    restrictedAdmin: string;
+    actions: Record<AdministrativeAction, string>;
+    targetTypes: Record<ProvisioningAuditEvent["targetType"], string>;
   };
   roles: Record<RoleId, string>;
 }
@@ -171,6 +237,87 @@ const en: Dictionary = {
     newRequestDescription: "Create a new department floor stock request.",
     controlledMedicinesDescription:
       "Controlled medicines permission foundation.",
+  },
+  administration: {
+    title: "Trusted administration",
+    subtitle: "Tenant-scoped operations with server-verified authority",
+    backToApp: "Back to application",
+    language: "Language",
+    overview: "Overview",
+    users: "Users",
+    facilities: "Facilities",
+    features: "Feature flags",
+    audit: "Audit",
+    accessDenied: "Administration access is not available for this account.",
+    unavailable: "Trusted administration data is temporarily unavailable.",
+    empty: "No records are available in your permitted scope.",
+    tenant: "Tenant",
+    scope: "Administrative scope",
+    uid: "User ID",
+    organization: "Organization",
+    facility: "Facility",
+    facilitiesLabel: "Facility memberships",
+    activeFacility: "Active facility",
+    accountStatus: "Account status",
+    active: "Active",
+    disabled: "Disabled",
+    pending: "Pending",
+    suspended: "Suspended",
+    details: "View details",
+    roles: "Role assignments",
+    role: "Role",
+    assignmentScope: "Assignment scope",
+    assign: "Assign role",
+    revoke: "Revoke",
+    membership: "Membership scope",
+    save: "Save changes",
+    saving: "Saving…",
+    activate: "Activate account",
+    deactivate: "Deactivate account",
+    confirmDeactivate: "Confirm account deactivation",
+    cancel: "Cancel",
+    facilityId: "Facility ID",
+    displayName: "Display name",
+    createOrUpdate: "Create or update facility",
+    enabled: "Enabled",
+    disabledFlag: "Disabled",
+    replaceFeatures: "Replace feature flags",
+    event: "Action",
+    actor: "Actor",
+    target: "Target",
+    timestamp: "Timestamp",
+    next: "Next page",
+    success: "The trusted change was confirmed.",
+    mutationError: "The change could not be completed.",
+    dashboardDescription:
+      "Manage users, facilities, tenant features, and review audited changes.",
+    usersDescription:
+      "A bounded directory filtered to your trusted administrative scope.",
+    facilitiesDescription:
+      "Manage facilities only within your current trusted scope.",
+    featuresDescription: "Replace the complete tenant feature configuration.",
+    auditDescription:
+      "Read-only, bounded provisioning activity in your permitted scope.",
+    platformOwner: "Platform owner",
+    unrestrictedAdmin: "Unrestricted tenant administrator",
+    restrictedAdmin: "Restricted tenant administrator",
+    actions: {
+      create_tenant: "Create tenant",
+      upsert_facility: "Create or update facility",
+      upsert_user_profile: "Update user profile",
+      set_account_status: "Change account status",
+      assign_role: "Assign role",
+      revoke_role_assignment: "Revoke role assignment",
+      replace_feature_flags: "Replace feature flags",
+    },
+    targetTypes: {
+      tenant: "Tenant",
+      facility: "Facility",
+      user_profile: "User profile",
+      account: "Account",
+      role_assignment: "Role assignment",
+      feature_flags: "Feature flags",
+    },
   },
   roles: {
     master: "Master",
@@ -269,6 +416,84 @@ const ar: Dictionary = {
     zebraLabelsDescription: "الوصول إلى مساحة طباعة ملصقات زيبرا.",
     newRequestDescription: "إنشاء طلب جديد لمخزون القسم.",
     controlledMedicinesDescription: "أساس صلاحيات الأدوية المخدرة والمقيدة.",
+  },
+  administration: {
+    title: "الإدارة الموثوقة",
+    subtitle: "عمليات ضمن نطاق المستأجر بصلاحيات متحقق منها على الخادم",
+    backToApp: "العودة إلى التطبيق",
+    language: "اللغة",
+    overview: "نظرة عامة",
+    users: "المستخدمون",
+    facilities: "المنشآت",
+    features: "علامات الميزات",
+    audit: "سجل التدقيق",
+    accessDenied: "الوصول إلى الإدارة غير متاح لهذا الحساب.",
+    unavailable: "بيانات الإدارة الموثوقة غير متاحة مؤقتًا.",
+    empty: "لا توجد سجلات متاحة ضمن نطاقك المسموح.",
+    tenant: "المستأجر",
+    scope: "نطاق الإدارة",
+    uid: "معرف المستخدم",
+    organization: "المنظمة",
+    facility: "المنشأة",
+    facilitiesLabel: "عضويات المنشآت",
+    activeFacility: "المنشأة النشطة",
+    accountStatus: "حالة الحساب",
+    active: "نشط",
+    disabled: "معطل",
+    pending: "قيد الانتظار",
+    suspended: "موقوف",
+    details: "عرض التفاصيل",
+    roles: "تعيينات الأدوار",
+    role: "الدور",
+    assignmentScope: "نطاق التعيين",
+    assign: "تعيين دور",
+    revoke: "إلغاء التعيين",
+    membership: "نطاق العضوية",
+    save: "حفظ التغييرات",
+    saving: "جارٍ الحفظ…",
+    activate: "تنشيط الحساب",
+    deactivate: "تعطيل الحساب",
+    confirmDeactivate: "تأكيد تعطيل الحساب",
+    cancel: "إلغاء",
+    facilityId: "معرف المنشأة",
+    displayName: "اسم العرض",
+    createOrUpdate: "إنشاء المنشأة أو تحديثها",
+    enabled: "مفعلة",
+    disabledFlag: "معطلة",
+    replaceFeatures: "استبدال علامات الميزات",
+    event: "الإجراء",
+    actor: "المنفذ",
+    target: "الهدف",
+    timestamp: "الوقت",
+    next: "الصفحة التالية",
+    success: "تم تأكيد التغيير الموثوق.",
+    mutationError: "تعذر إتمام التغيير.",
+    dashboardDescription:
+      "إدارة المستخدمين والمنشآت وميزات المستأجر ومراجعة التغييرات المدققة.",
+    usersDescription: "دليل محدود ومصفّى حسب نطاقك الإداري الموثوق.",
+    facilitiesDescription: "إدارة المنشآت ضمن نطاقك الموثوق الحالي فقط.",
+    featuresDescription: "استبدال إعداد ميزات المستأجر بالكامل.",
+    auditDescription: "نشاط تزويد للقراءة فقط ومحدود ضمن نطاقك المسموح.",
+    platformOwner: "مالك المنصة",
+    unrestrictedAdmin: "مسؤول مستأجر غير مقيد",
+    restrictedAdmin: "مسؤول مستأجر مقيد",
+    actions: {
+      create_tenant: "إنشاء مستأجر",
+      upsert_facility: "إنشاء منشأة أو تحديثها",
+      upsert_user_profile: "تحديث ملف المستخدم",
+      set_account_status: "تغيير حالة الحساب",
+      assign_role: "تعيين دور",
+      revoke_role_assignment: "إلغاء تعيين دور",
+      replace_feature_flags: "استبدال علامات الميزات",
+    },
+    targetTypes: {
+      tenant: "المستأجر",
+      facility: "المنشأة",
+      user_profile: "ملف المستخدم",
+      account: "الحساب",
+      role_assignment: "تعيين الدور",
+      feature_flags: "علامات الميزات",
+    },
   },
   roles: {
     master: "Master",

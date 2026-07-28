@@ -243,6 +243,37 @@ export const setAccountStatusSchema = z
   })
   .strict();
 
+export const updateUserMembershipSchema = z
+  .object({
+    uid: provisioningIdentifierSchema,
+    tenantId: provisioningIdentifierSchema,
+    organizationId: provisioningIdentifierSchema,
+    facilityIds: z
+      .array(provisioningIdentifierSchema)
+      .min(1)
+      .max(trustedSessionLimits.facilityMemberships),
+    activeFacilityId: provisioningIdentifierSchema,
+  })
+  .strict()
+  .superRefine((membership, context) => {
+    if (
+      new Set(membership.facilityIds).size !== membership.facilityIds.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["facilityIds"],
+        message: "Facility identifiers must be unique.",
+      });
+    }
+    if (!membership.facilityIds.includes(membership.activeFacilityId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["activeFacilityId"],
+        message: "Active facility must be an allowed facility.",
+      });
+    }
+  });
+
 export const assignRoleSchema = z
   .object({
     assignmentId: provisioningIdentifierSchema,
@@ -265,5 +296,6 @@ export const replaceFeatureFlagsSchema = z
   .object({
     tenantId: provisioningIdentifierSchema,
     featureFlags: featureFlagsSchema,
+    expectedFeatureFlags: featureFlagsSchema.optional(),
   })
   .strict();

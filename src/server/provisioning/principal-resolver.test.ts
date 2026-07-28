@@ -67,6 +67,21 @@ function dependencies(
 }
 
 describe("trusted administrator principal resolution", () => {
+  it("resolves a server-session UID without accepting a second client credential", async () => {
+    const { auth, firestore } = dependencies();
+    const resolver = createTrustedAdministratorPrincipalResolver(
+      auth,
+      firestore,
+    );
+
+    await expect(resolver.resolveUid("admin-1")).resolves.toEqual({
+      ok: true,
+      principal,
+    });
+    expect(auth.verifyIdToken).not.toHaveBeenCalled();
+    expect(auth.getUser).toHaveBeenCalledWith("admin-1");
+  });
+
   it("requires a bearer identity and resolves authority only from the trusted record", async () => {
     const { auth, firestore, get } = dependencies();
     const resolver = createTrustedAdministratorPrincipalResolver(

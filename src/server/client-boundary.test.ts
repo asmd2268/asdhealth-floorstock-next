@@ -115,4 +115,46 @@ describe("Firebase Admin client boundary", () => {
     expect(demoShell).not.toContain("FacilitySwitcher");
     expect(demoShell).not.toContain("switchFacility");
   });
+
+  it("keeps the administration client presentational and free of trusted principals", () => {
+    const clientFiles = sourceFiles(
+      join(process.cwd(), "src/components/administration"),
+    ).filter((file) =>
+      /^['\"]use client['\"];/m.test(readFileSync(file, "utf8")),
+    );
+    for (const file of clientFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(
+        /AdministratorPrincipal|provisioningAdministrators|tenantId|sessionId|credentialHash|explicitPermissionOverrides|firebase-admin|@\/server\//,
+      );
+      expect(source).not.toMatch(
+        /localStorage|sessionStorage|NEXT_PUBLIC_ENABLE_DEMO/,
+      );
+    }
+    const adminRoutes = sourceFiles(
+      join(process.cwd(), "src/app/api/admin"),
+    ).map((file) => readFileSync(file, "utf8"));
+    expect(adminRoutes).toHaveLength(6);
+    for (const source of adminRoutes) {
+      expect(source).toContain("handleAdministrationMutation");
+      expect(source).toContain("getAdministrationProvisioningService");
+      expect(source).toContain("admin.tenantId");
+      expect(source).not.toContain("getTrustedProvisioningService");
+      expect(source).not.toMatch(
+        /authorizationHeader|customClaims|emailDomain/,
+      );
+    }
+    const routeSchemas = readFileSync(
+      join(process.cwd(), "src/server/administration/route-schemas.ts"),
+      "utf8",
+    );
+    expect(routeSchemas).not.toMatch(/tenantId|platformId|actor|principal/);
+    const featureRoute = readFileSync(
+      join(process.cwd(), "src/app/api/admin/features/route.ts"),
+      "utf8",
+    );
+    expect(featureRoute).toContain(
+      "expectedFeatureFlags: body.expectedFeatureFlags",
+    );
+  });
 });
