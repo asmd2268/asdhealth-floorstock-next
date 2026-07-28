@@ -22,6 +22,7 @@ function dependencies(
     allowedOrigin: () => "https://admin.asdhealth.example",
     principalResolver: () => ({
       resolve: vi.fn().mockResolvedValue(principalResult),
+      resolveUid: vi.fn().mockResolvedValue(principalResult),
     }),
   };
 }

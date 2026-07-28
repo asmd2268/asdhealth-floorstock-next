@@ -15,6 +15,15 @@ export const administrativeActions = [
   "replace_feature_flags",
 ] as const;
 
+export const provisioningAuditTargetTypes = [
+  "tenant",
+  "facility",
+  "user_profile",
+  "account",
+  "role_assignment",
+  "feature_flags",
+] as const;
+
 export type AdministrativeAction = (typeof administrativeActions)[number];
 
 export type AdministratorPrincipal =
@@ -78,6 +87,14 @@ export interface SetAccountStatusInput {
   accountStatus: "active" | "disabled";
 }
 
+export interface UpdateUserMembershipInput {
+  uid: string;
+  tenantId: string;
+  organizationId: string;
+  facilityIds: readonly string[];
+  activeFacilityId: string;
+}
+
 export interface AssignRoleInput {
   assignmentId: string;
   uid: string;
@@ -95,6 +112,7 @@ export interface RevokeRoleAssignmentInput {
 export interface ReplaceFeatureFlagsInput {
   tenantId: string;
   featureFlags: FeatureFlagSet;
+  expectedFeatureFlags?: FeatureFlagSet;
 }
 
 export type ProvisioningFailureCode =
@@ -112,13 +130,7 @@ export interface ProvisioningAuditEvent {
   eventId: string;
   actor: AdministratorPrincipal;
   action: AdministrativeAction;
-  targetType:
-    | "tenant"
-    | "facility"
-    | "user_profile"
-    | "account"
-    | "role_assignment"
-    | "feature_flags";
+  targetType: (typeof provisioningAuditTargetTypes)[number];
   targetId: string;
   tenantId: string;
   timestamp: string;

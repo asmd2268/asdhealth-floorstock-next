@@ -84,6 +84,7 @@ function key(path: ProvisioningDocumentPath) {
 
 class MemoryProvisioningStore implements ProvisioningStore {
   documents = new Map<string, unknown>();
+  readPaths: string[] = [];
   transactions = 0;
   failAudit = false;
 
@@ -97,7 +98,10 @@ class MemoryProvisioningStore implements ProvisioningStore {
     this.transactions += 1;
     const pending = new Map(this.documents);
     const transaction: ProvisioningTransaction = {
-      get: async (path) => pending.get(key(path)) ?? null,
+      get: async (path) => {
+        this.readPaths.push(key(path));
+        return pending.get(key(path)) ?? null;
+      },
       query: async (path, filters, maxResults) => {
         const prefix = key(path) + "/";
         return [...pending.entries()]
@@ -538,6 +542,28 @@ describe("trusted provisioning service", () => {
     expect(store.documents).toEqual(snapshot);
   });
 
+  it("rejects idempotency-key reuse across different operations for the same actor and tenant", async () => {
+    const store = seededStore();
+    const service = createService(store);
+    const sharedContext = context(platformOwner, "cross-operation-request");
+
+    await expect(
+      service.setAccountStatus(sharedContext, {
+        uid: "user-1",
+        tenantId: "tenant-1",
+        accountStatus: "disabled",
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      service.assignRole(sharedContext, roleAssignment),
+    ).resolves.toEqual({ ok: false, code: "conflict" });
+    expect(
+      store.documents.has(
+        "userRoleAssignments/user-1/assignments/assignment-1",
+      ),
+    ).toBe(false);
+  });
+
   it("isolates equal request IDs across tenants and actors", async () => {
     const secondTenant = {
       ...tenantDirectory,
@@ -787,6 +813,251 @@ describe("trusted provisioning service", () => {
         featureFlags: { ...featureFlags, announcements: false },
       }),
     ).toEqual({ ok: true });
+  });
+
+  it("does not assign new roles while a tenant is inactive", async () => {
+    const store = seededStore();
+    store.documents.set("tenantDirectories/tenant-1", {
+      ...tenantDirectory,
+      status: "inactive",
+    });
+    await expect(
+      createService(store).assignRole(context(platformOwner), roleAssignment),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+  });
+
+  it("rejects duplicate semantic role assignments deterministically", async () => {
+    const store = seededStore();
+    store.documents.set(
+      "userRoleAssignments/user-1/assignments/existing-assignment",
+      {
+        uid: roleAssignment.uid,
+        tenantId: roleAssignment.tenantId,
+        roleId: roleAssignment.roleId,
+        scope: roleAssignment.scope,
+      },
+    );
+    const service = createService(store);
+
+    await expect(
+      service.assignRole(context(platformOwner), {
+        ...roleAssignment,
+        assignmentId: "different-assignment",
+      }),
+    ).resolves.toEqual({ ok: false, code: "conflict" });
+    expect(
+      store.documents.has(
+        "userRoleAssignments/user-1/assignments/different-assignment",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not revoke an assignment whose trusted tenant differs from the request tenant", async () => {
+    const store = seededStore();
+    const path =
+      "userRoleAssignments/user-1/assignments/cross-tenant-assignment";
+    store.documents.set(path, {
+      uid: "user-1",
+      tenantId: "tenant-other",
+      roleId: "pharmacy_manager",
+      scope: roleAssignment.scope,
+    });
+
+    await expect(
+      createService(store).revokeRoleAssignment(context(platformOwner), {
+        assignmentId: "cross-tenant-assignment",
+        uid: "user-1",
+        tenantId: "tenant-1",
+      }),
+    ).resolves.toEqual({ ok: false, code: "conflict" });
+    expect(store.documents.has(path)).toBe(true);
+  });
+
+  it("prevents tenant administrators from modifying any administrator principal", async () => {
+    const store = seededStore();
+    store.documents.set("provisioningAdministrators/user-1", {
+      kind: "tenant_admin",
+      scope: "unrestricted",
+      uid: "user-1",
+      platformId: "platform-1",
+      tenantId: "tenant-1",
+    });
+    const service = createService(store);
+
+    await expect(
+      service.setAccountStatus(context(unrestrictedTenantAdministrator), {
+        uid: "user-1",
+        tenantId: "tenant-1",
+        accountStatus: "disabled",
+      }),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    await expect(
+      service.assignRole(context(unrestrictedTenantAdministrator, "role"), {
+        ...roleAssignment,
+        assignmentId: "admin-role",
+      }),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    expect(store.readPaths).toContain("provisioningAdministrators/user-1");
+    expect(store.documents.get("userProfiles/user-1")).toEqual(userProfile);
+  });
+
+  it("updates membership transactionally without replacing status or explicit denies", async () => {
+    const store = seededStore();
+    const deny = {
+      effect: "deny",
+      resource: "announcements",
+      action: "read",
+      scope: roleAssignment.scope,
+    } as const;
+    store.documents.set("userProfiles/user-1", {
+      ...userProfile,
+      accountStatus: "suspended",
+      explicitPermissionOverrides: [deny],
+    });
+    const service = createService(store);
+
+    await expect(
+      service.updateUserMembership(context(platformOwner), {
+        uid: "user-1",
+        tenantId: "tenant-1",
+        organizationId: "organization-1",
+        facilityIds: ["facility-1"],
+        activeFacilityId: "facility-1",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(store.documents.get("userProfiles/user-1")).toMatchObject({
+      accountStatus: "suspended",
+      explicitPermissionOverrides: [deny],
+    });
+  });
+
+  it("rejects membership changes that would orphan preserved overrides or roles", async () => {
+    const store = seededStore();
+    store.documents.set("tenantDirectories/tenant-1", {
+      ...tenantDirectory,
+      organizations: [
+        ...tenantDirectory.organizations,
+        { id: "organization-2" },
+      ],
+      facilities: [
+        ...tenantDirectory.facilities,
+        { id: "facility-2", organizationId: "organization-2" },
+      ],
+    });
+    store.documents.set("userProfiles/user-1", {
+      ...userProfile,
+      explicitPermissionOverrides: [
+        {
+          effect: "deny",
+          resource: "announcements",
+          action: "read",
+          scope: roleAssignment.scope,
+        },
+      ],
+    });
+    const service = createService(store);
+    const move = {
+      uid: "user-1",
+      tenantId: "tenant-1",
+      organizationId: "organization-2",
+      facilityIds: ["facility-2"],
+      activeFacilityId: "facility-2",
+    } as const;
+
+    await expect(
+      service.updateUserMembership(context(platformOwner), move),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+
+    store.documents.set("userProfiles/user-1", {
+      ...userProfile,
+      explicitPermissionOverrides: [],
+    });
+    store.documents.set(
+      "userRoleAssignments/user-1/assignments/assignment-old-scope",
+      {
+        uid: roleAssignment.uid,
+        tenantId: roleAssignment.tenantId,
+        roleId: roleAssignment.roleId,
+        scope: roleAssignment.scope,
+      },
+    );
+    await expect(
+      service.updateUserMembership(
+        context(platformOwner, "move-with-role"),
+        move,
+      ),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+    expect(store.documents.get("userProfiles/user-1")).toMatchObject({
+      organizationId: "organization-1",
+      facilityIds: ["facility-1"],
+    });
+  });
+
+  it("revalidates the administrator principal inside console transactions", async () => {
+    const store = seededStore();
+    store.documents.set(
+      "provisioningAdministrators/tenant-admin-unrestricted",
+      unrestrictedTenantAdministrator,
+    );
+    const service = createTrustedProvisioningService(
+      store,
+      () => new Date("2026-07-22T00:00:00.000Z"),
+      () => "audit-fresh-principal",
+      { revalidatePrincipal: true },
+    );
+    await expect(
+      service.setAccountStatus(
+        context(unrestrictedTenantAdministrator, "fresh-principal"),
+        {
+          uid: "user-1",
+          tenantId: "tenant-1",
+          accountStatus: "disabled",
+        },
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    store.documents.set(
+      "provisioningAdministrators/tenant-admin-unrestricted",
+      {
+        ...unrestrictedTenantAdministrator,
+        scope: "restricted",
+        organizationIds: ["organization-1"],
+        facilityIds: [],
+      },
+    );
+    await expect(
+      service.setAccountStatus(
+        context(unrestrictedTenantAdministrator, "stale-principal"),
+        {
+          uid: "user-1",
+          tenantId: "tenant-1",
+          accountStatus: "active",
+        },
+      ),
+    ).resolves.toEqual({ ok: false, code: "forbidden" });
+    expect(store.documents.get("userProfiles/user-1")).toMatchObject({
+      accountStatus: "disabled",
+    });
+  });
+
+  it("rejects stale feature replacement without overwriting the transactional current flags", async () => {
+    const store = seededStore();
+    const currentFlags = { ...featureFlags, announcements: false };
+    store.documents.set("tenantDirectories/tenant-1", {
+      ...tenantDirectory,
+      featureFlags: currentFlags,
+    });
+
+    await expect(
+      createService(store).replaceFeatureFlags(context(platformOwner), {
+        tenantId: "tenant-1",
+        expectedFeatureFlags: featureFlags,
+        featureFlags: { ...featureFlags, new_request: true },
+      }),
+    ).resolves.toEqual({ ok: false, code: "conflict" });
+    expect(store.documents.get("tenantDirectories/tenant-1")).toMatchObject({
+      featureFlags: currentFlags,
+    });
   });
 
   it("sanitizes audit metadata and excludes secret-bearing fields", () => {

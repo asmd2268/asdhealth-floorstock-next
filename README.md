@@ -18,8 +18,9 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/services/auth` exchanges browser identity for an opaque server session and coordinates auth-state changes without treating browser state as authorization.
 - `src/services/firebase` validates public browser configuration with Zod, lazily initializes one named browser app plus singleton Auth and Firestore boundaries, adapts Firebase identities, and validates trusted session documents before returning application-owned types.
 - `src/server/session` is physically server-only and verifies Firebase ID tokens, reads validated trusted records through Admin adapters, stores opaque revocable sessions, enforces CSRF/origin checks, and re-runs permission checks for protected operations.
+- `src/domain/administration` and `src/server/administration` provide the pure scope-filtering policy, bounded validated read repository, session-to-principal binding, and hardened operation-specific HTTP boundary for the trusted administration console.
 
-The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md.
+The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md. The server-protected administration console and its authority matrix are documented in docs/trusted-administration-console.md.
 
 The checked-in demo represents one hospital. Its types and scope checks support platform-wide, organization/regional, and facility-specific assignments so additional hospitals and multiple roles per user can be introduced without changing the authorization model.
 
@@ -101,13 +102,14 @@ Trusted administrative provisioning is exposed only through operation-specific s
 
 Every trusted-data mutation, server-ID append-only audit event, and actor-plus-tenant-scoped idempotency marker share one Firestore transaction. The validated client request ID is retained only as correlation data and cannot choose the global audit path or block another actor or tenant. Audit metadata is deterministic and bounded, rejects nested data, and removes secret-bearing keys or values. Browser clients cannot access provisioning principals, audits, or request markers. The checked-in rules and provisioning foundation remain undeployed.
 
+The trusted administration console is available under `/app/admin` only after the opaque server session and administrator principal both validate. It offers bounded, scope-filtered users, facilities, feature flags, and sanitized audit views plus operation-specific account, membership, role, facility, and feature mutations. Console requests derive their tenant from the current trusted session, revalidate the current administrator principal inside each mutation transaction, reject duplicate JSON keys and duplicate semantic role assignments, and never serialize administrative authority to the browser. Firestore query/index assumptions and deferred workflows are listed in `docs/trusted-administration-console.md`; none are deployed by this phase.
+
 ## Intentionally deferred
 
-- General administration UI and administrator-principal provisioning tooling
+- Administrator-principal and break-glass provisioning tooling
 - Firestore rules deployment and integration validation against a real project configuration
 - Password reset, registration, multi-factor authentication, and account recovery
 - Production session retention cleanup, global session-management UI, rate limiting, and monitoring
-- Facility selection and switching UI
 - Production Firebase configuration or deployment
 - Stock, controlled-medicine, and business collection workflows
 

@@ -52,6 +52,333 @@ a {
   text-decoration: none;
 }
 
+.admin-shell {
+  min-height: 100vh;
+  background: #f5f8f9;
+}
+
+.admin-header,
+.admin-nav,
+.admin-content,
+.admin-footer {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-block: 28px 20px;
+}
+
+.admin-header p,
+.admin-header h1,
+.admin-header span,
+.admin-page-heading h2,
+.admin-page-heading p {
+  margin: 0;
+}
+
+.admin-header p {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.admin-header h1 {
+  margin-block: 3px;
+  font-size: clamp(24px, 4vw, 36px);
+}
+.admin-header > div > span {
+  color: var(--muted);
+}
+.admin-header-actions {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+}
+.admin-header-actions > a {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.admin-locale {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.admin-locale select {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+  padding-inline: 10px;
+}
+.admin-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+}
+.admin-nav a {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 9px;
+  color: #31505a;
+  font-weight: 650;
+}
+.admin-nav a:hover,
+.admin-nav a:focus-visible {
+  background: #e8f5f5;
+  color: #065e68;
+}
+.admin-content {
+  padding-block: 32px 56px;
+}
+.admin-footer {
+  padding-block: 20px 32px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+.admin-page-heading {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 24px;
+}
+.admin-page-heading p {
+  color: var(--muted);
+}
+.admin-page-heading dl {
+  display: flex;
+  gap: 16px;
+  margin: 14px 0 0;
+}
+.admin-page-heading dl div {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.admin-page-heading dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.admin-page-heading dd {
+  margin: 3px 0 0;
+  font-weight: 650;
+}
+.admin-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-card,
+.admin-panel {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: white;
+  box-shadow: 0 8px 28px rgb(21 57 65 / 5%);
+}
+.admin-card h3,
+.admin-panel h3 {
+  margin-top: 0;
+}
+.admin-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+.admin-panel + .admin-panel {
+  margin-top: 18px;
+}
+.admin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+}
+.admin-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-table-wrap th,
+.admin-table-wrap td {
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: middle;
+}
+.admin-table-wrap th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.admin-table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+.admin-table-wrap code,
+.admin-role-list code {
+  overflow-wrap: anywhere;
+}
+.admin-next {
+  display: inline-flex;
+  margin-top: 18px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #0b707b;
+  color: white;
+}
+.admin-form {
+  display: grid;
+  max-width: 680px;
+  gap: 16px;
+}
+.admin-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.admin-form input:not([type="checkbox"]),
+.admin-form select {
+  min-height: 43px;
+  padding-inline: 11px;
+  border: 1px solid #bdcdd1;
+  border-radius: 9px;
+  background: white;
+}
+.admin-form fieldset {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.admin-form .check-row,
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.admin-form button,
+.admin-action-stack button,
+.danger-button {
+  width: fit-content;
+  min-height: 42px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 9px;
+  background: #0a7580;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+.admin-form button:disabled,
+.admin-action-stack button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.danger-button {
+  background: #a33036 !important;
+}
+.confirmation-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e3b2b4;
+  border-radius: 10px;
+  background: #fff7f7;
+}
+.admin-action-stack {
+  display: grid;
+  gap: 7px;
+}
+.admin-live-message {
+  min-height: 20px;
+  margin: 0;
+}
+.admin-role-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.admin-role-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.admin-role-list li > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+.feature-toggle {
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.feature-toggle > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-denied {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-header {
+    align-items: start;
+    flex-direction: column;
+  }
+  .admin-header-actions {
+    width: 100%;
+    align-items: end;
+    justify-content: space-between;
+  }
+  .admin-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-page-heading dl {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .admin-role-list li {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+
 .app-shell {
   display: grid;
   min-height: 100vh;

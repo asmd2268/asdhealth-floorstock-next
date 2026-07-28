@@ -21,7 +21,15 @@ const permissionOverrideSchema = z
   .strict();
 
 export const facilityBodySchema = z
-  .object({ organizationId: provisioningIdentifierSchema })
+  .object({
+    organizationId: provisioningIdentifierSchema,
+    displayName: z
+      .string()
+      .min(1)
+      .max(120)
+      .refine((value) => value === value.trim() && !/\p{C}/u.test(value))
+      .optional(),
+  })
   .strict();
 
 export const userProfileBodySchema = z
