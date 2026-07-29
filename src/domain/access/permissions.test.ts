@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { can, canAccessFeature, resolvePermission } from "./permissions";
+import {
+  can,
+  canAccessFeature,
+  resolvePermission,
+  resolveScopedPermission,
+} from "./permissions";
 import { roleIds, type PermissionRequest, type RoleId } from "./types";
 
 const facilityScope = {
@@ -43,6 +48,8 @@ describe("permission resolution", () => {
     for (const resource of [
       "inventory_item",
       "inventory_location",
+      "inventory_lot",
+      "floor_stock_configuration",
       "inventory_stock",
       "inventory_balance",
       "inventory_transaction",
@@ -89,6 +96,31 @@ describe("permission resolution", () => {
         ],
       }),
     ).toEqual({ allowed: false, reason: "explicit_deny" });
+  });
+
+  it("requires organization-wide authority for tenant catalog management", () => {
+    expect(
+      resolveScopedPermission({
+        roleAssignments: [{ role: "pharmacy_manager", scope: facilityScope }],
+        resource: "inventory_item",
+        action: "manage",
+        subjectScope: organizationScope,
+        targetScope: organizationScope,
+        featureFlags: { inventory: true },
+      }).allowed,
+    ).toBe(false);
+    expect(
+      resolveScopedPermission({
+        roleAssignments: [
+          { role: "pharmacy_manager", scope: organizationScope },
+        ],
+        resource: "inventory_item",
+        action: "manage",
+        subjectScope: organizationScope,
+        targetScope: organizationScope,
+        featureFlags: { inventory: true },
+      }).allowed,
+    ).toBe(true);
   });
   it.each(pharmacyFeatureRoles)(
     "allows announcements for %s by default",

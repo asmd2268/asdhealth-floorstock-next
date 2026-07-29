@@ -8,15 +8,13 @@ import {
 } from "firebase-admin/firestore";
 
 import { resolveScopedPermission } from "@/domain/access/permissions";
+import type { PermissionAction, ResourceId } from "@/domain/access/types";
 import { resolveSession } from "@/domain/auth/session-resolver";
 import type {
   InventoryStore,
   InventoryTransactionStore,
 } from "@/domain/inventory/store";
-import type {
-  InventoryActorContext,
-  InventoryOperation,
-} from "@/domain/inventory/types";
+import type { InventoryActorContext } from "@/domain/inventory/types";
 import { getFirebaseAdminApp } from "@/server/firebase-admin/app";
 import {
   fingerprintTrustedAuthorization,
@@ -51,11 +49,13 @@ async function raw(
   return snapshot.exists ? snapshot.data() : null;
 }
 
-async function revalidateActor(
+export async function revalidateInventoryActorPermission(
   transaction: Transaction,
   firestore: Firestore,
   context: InventoryActorContext,
-  operation: InventoryOperation,
+  resource: ResourceId,
+  action: PermissionAction,
+  scope: "facility" | "organization" = "facility",
 ): Promise<boolean> {
   try {
     const profileRaw = await raw(
@@ -107,12 +107,20 @@ async function revalidateActor(
       )
     )
       return false;
+    const targetScope =
+      scope === "organization"
+        ? {
+            kind: "organization" as const,
+            platformId: context.platformId,
+            organizationId: context.organizationId,
+          }
+        : trusted.user.activeScope;
     return resolveScopedPermission({
       roleAssignments: trusted.user.roleAssignments,
-      resource: "inventory_stock",
-      action: actionByOperation[operation],
-      subjectScope: trusted.user.activeScope,
-      targetScope: trusted.user.activeScope,
+      resource,
+      action,
+      subjectScope: targetScope,
+      targetScope,
       featureFlags: trusted.featureFlags,
       overrides: trusted.user.explicitPermissionOverrides,
     }).allowed;
@@ -127,7 +135,13 @@ function adapter(
 ): InventoryTransactionStore {
   return {
     revalidateActor: (context, operation) =>
-      revalidateActor(transaction, firestore, context, operation),
+      revalidateInventoryActorPermission(
+        transaction,
+        firestore,
+        context,
+        "inventory_stock",
+        actionByOperation[operation],
+      ),
     getItem: (itemId) =>
       raw(transaction, firestore, inventoryPaths.item(itemId)),
     getLocation: (locationId) =>

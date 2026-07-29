@@ -1,9 +1,14 @@
 import Link from "next/link";
 
 import { InventoryPostingForm } from "@/components/inventory/inventory-posting-form";
+import { InventoryProvisioningForms } from "@/components/inventory/inventory-provisioning-forms";
 import { baseBrand } from "@/config/platform";
 import { resolveScopedPermission } from "@/domain/access/permissions";
 import type { InventoryOperation } from "@/domain/inventory/types";
+import {
+  inventoryProvisioningOperations,
+  inventoryProvisioningResource,
+} from "@/domain/inventory/provisioning-types";
 import { getInventoryQueryRepository } from "@/server/inventory/repository";
 import { loadInventoryPageContext } from "@/server/inventory/page-context";
 
@@ -59,6 +64,27 @@ export default async function InventoryPage() {
         overrides: result.context.explicitPermissionOverrides,
       }).allowed,
   );
+  const provisioningOperations = inventoryProvisioningOperations.filter(
+    (operation) => {
+      const targetScope =
+        operation === "upsert_item"
+          ? {
+              kind: "organization" as const,
+              platformId: result.context.platformId,
+              organizationId: result.context.organizationId,
+            }
+          : result.context.activeScope;
+      return resolveScopedPermission({
+        roleAssignments: result.context.roleAssignments,
+        resource: inventoryProvisioningResource[operation],
+        action: "manage",
+        subjectScope: targetScope,
+        targetScope,
+        featureFlags: result.context.featureFlags,
+        overrides: result.context.explicitPermissionOverrides,
+      }).allowed;
+    },
+  );
   const itemName = new Map(
     directory.items.items.map((item) => [
       item.itemId,
@@ -85,6 +111,10 @@ export default async function InventoryPage() {
         <Link href="/app">{labels.backToApp}</Link>
       </header>
       <main>
+        <InventoryProvisioningForms
+          operations={provisioningOperations}
+          labels={labels.provisioning}
+        />
         <InventoryPostingForm
           items={directory.items.items}
           locations={directory.locations.items}

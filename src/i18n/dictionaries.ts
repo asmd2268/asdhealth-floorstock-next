@@ -114,6 +114,45 @@ export interface Dictionary {
     success: string;
     error: string;
     accessDenied: string;
+    provisioning: {
+      title: string;
+      description: string;
+      item: string;
+      location: string;
+      lot: string;
+      configuration: string;
+      identifier: string;
+      itemCode: string;
+      genericName: string;
+      brandName: string;
+      dosageForm: string;
+      strength: string;
+      baseUnit: string;
+      dispensingUnit: string;
+      conversions: string;
+      barcodes: string;
+      externalReference: string;
+      displayName: string;
+      departmentId: string;
+      parentLocationId: string;
+      locationKind: string;
+      itemId: string;
+      lotNumber: string;
+      expiryDate: string;
+      locationId: string;
+      minimum: string;
+      reorder: string;
+      maximum: string;
+      active: string;
+      inactive: string;
+      lotControlled: string;
+      expiryControlled: string;
+      negativeStockAllowed: string;
+      save: string;
+      saving: string;
+      success: string;
+      error: string;
+    };
     transactionTypes: Record<
       | "receipt"
       | "issue"
@@ -310,6 +349,46 @@ const en: Dictionary = {
     success: "Movement posted securely.",
     error: "The movement could not be posted.",
     accessDenied: "Inventory access is not available for this session.",
+    provisioning: {
+      title: "Inventory provisioning",
+      description:
+        "Create or update trusted catalog, location, lot, and floor-stock records.",
+      item: "Medication item",
+      location: "Inventory location",
+      lot: "Medication lot",
+      configuration: "Floor-stock configuration",
+      identifier: "Record ID",
+      itemCode: "Item code",
+      genericName: "Generic name",
+      brandName: "Brand name",
+      dosageForm: "Dosage form",
+      strength: "Strength",
+      baseUnit: "Base unit",
+      dispensingUnit: "Dispensing unit",
+      conversions: "Unit conversions (box:10,pack:5)",
+      barcodes: "Barcode IDs (comma separated)",
+      externalReference: "External reference",
+      displayName: "Display name",
+      departmentId: "Department ID",
+      parentLocationId: "Parent location ID",
+      locationKind: "Location kind",
+      itemId: "Item ID",
+      lotNumber: "Lot number",
+      expiryDate: "Expiry date",
+      locationId: "Location ID",
+      minimum: "Minimum quantity",
+      reorder: "Reorder threshold",
+      maximum: "Maximum quantity",
+      active: "Active",
+      inactive: "Inactive",
+      lotControlled: "Lot controlled",
+      expiryControlled: "Expiry controlled",
+      negativeStockAllowed: "Allow negative stock",
+      save: "Save trusted record",
+      saving: "Saving…",
+      success: "The trusted inventory record was saved.",
+      error: "The trusted inventory record could not be saved.",
+    },
     transactionTypes: {
       receipt: "Receipt",
       issue: "Issue",
@@ -528,6 +607,46 @@ const ar: Dictionary = {
     success: "تم تسجيل الحركة بأمان.",
     error: "تعذر تسجيل الحركة.",
     accessDenied: "الوصول إلى المخزون غير متاح لهذه الجلسة.",
+    provisioning: {
+      title: "تزويد بيانات المخزون",
+      description:
+        "إنشاء أو تحديث دليل الأدوية والمواقع والتشغيلات وإعدادات مخزون الأقسام الموثوقة.",
+      item: "صنف دوائي",
+      location: "موقع مخزون",
+      lot: "تشغيلة دواء",
+      configuration: "إعداد مخزون القسم",
+      identifier: "معرف السجل",
+      itemCode: "رمز الصنف",
+      genericName: "الاسم العلمي",
+      brandName: "الاسم التجاري",
+      dosageForm: "الشكل الصيدلاني",
+      strength: "التركيز",
+      baseUnit: "الوحدة الأساسية",
+      dispensingUnit: "وحدة الصرف",
+      conversions: "تحويلات الوحدات (box:10,pack:5)",
+      barcodes: "معرفات الباركود (مفصولة بفواصل)",
+      externalReference: "المرجع الخارجي",
+      displayName: "اسم العرض",
+      departmentId: "معرف القسم",
+      parentLocationId: "معرف الموقع الأب",
+      locationKind: "نوع الموقع",
+      itemId: "معرف الصنف",
+      lotNumber: "رقم التشغيلة",
+      expiryDate: "تاريخ الانتهاء",
+      locationId: "معرف الموقع",
+      minimum: "الحد الأدنى",
+      reorder: "حد إعادة الطلب",
+      maximum: "الحد الأعلى",
+      active: "نشط",
+      inactive: "غير نشط",
+      lotControlled: "يتطلب تشغيلة",
+      expiryControlled: "خاضع لتاريخ الانتهاء",
+      negativeStockAllowed: "السماح بالمخزون السالب",
+      save: "حفظ السجل الموثوق",
+      saving: "جارٍ الحفظ…",
+      success: "تم حفظ سجل المخزون الموثوق.",
+      error: "تعذر حفظ سجل المخزون الموثوق.",
+    },
     transactionTypes: {
       receipt: "استلام",
       issue: "صرف",

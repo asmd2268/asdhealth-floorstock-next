@@ -31,8 +31,14 @@ Item conversions are exact positive integers. Lot-controlled items require a val
 
 Expiry eligibility currently uses a documented UTC calendar boundary: a date remains usable through that date in UTC. A future trusted facility-time-zone field may replace this policy if regional operations require local-midnight semantics; the browser cannot choose the time zone.
 
-Catalog, location, and lot records are server-provisioned in this phase; no generic document-write API exists. `firestore.indexes.json` declares only the bounded tenant and facility directory queries and remains undeployed.
+Catalog, location, lot, and floor-stock records now have separate protected
+server provisioning operations documented in
+`inventory-provisioning-foundation.md`; no generic document-write API exists.
+`firestore.indexes.json` declares the bounded directory and provisioning
+invariant queries and remains undeployed.
 
 ## Deferred
 
-Floor-stock requests, cabinet/shelf workflows, crash carts, public QR expiry pages, controlled medicines, printing, catalog provisioning UI, lot lifecycle UI, replenishment, reservation, costing, reporting, and deployment remain out of scope.
+Floor-stock requests, cabinet/shelf workflows, crash carts, public QR expiry
+pages, controlled medicines, printing, bulk import, deletion, replenishment,
+reservation, costing, reporting, and deployment remain out of scope.

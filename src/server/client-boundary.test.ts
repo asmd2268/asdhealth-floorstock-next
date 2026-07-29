@@ -159,16 +159,17 @@ describe("Firebase Admin client boundary", () => {
   });
 
   it("keeps inventory UI free of trusted scope and server modules", () => {
-    const source = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/inventory/inventory-posting-form.tsx",
-      ),
-      "utf8",
+    const clientFiles = sourceFiles(
+      join(process.cwd(), "src/components/inventory"),
+    ).filter((file) =>
+      /^['\"]use client['\"];/m.test(readFileSync(file, "utf8")),
     );
-    expect(source).not.toMatch(
-      /tenantId|organizationId|facilityId|roleAssignments|featureFlags|explicitPermissionOverrides|trustedStateFingerprint|firebase-admin|@\/server\//,
-    );
-    expect(source).not.toMatch(/localStorage|sessionStorage|customClaims/);
+    for (const file of clientFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(
+        /tenantId|organizationId|facilityId|roleAssignments|featureFlags|explicitPermissionOverrides|trustedStateFingerprint|firebase-admin|@\/server\//,
+      );
+      expect(source).not.toMatch(/localStorage|sessionStorage|customClaims/);
+    }
   });
 });
