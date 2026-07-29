@@ -20,6 +20,11 @@ The production application at `floorstock-one.vercel.app` is separate and remain
 - `src/server/session` is physically server-only and verifies Firebase ID tokens, reads validated trusted records through Admin adapters, stores opaque revocable sessions, enforces CSRF/origin checks, and re-runs permission checks for protected operations.
 - `src/domain/administration` and `src/server/administration` provide the pure scope-filtering policy, bounded validated read repository, session-to-principal binding, and hardened operation-specific HTTP boundary for the trusted administration console.
 - `src/domain/inventory` defines the medication catalog, hierarchical locations, lots and date-only expiry, exact integer quantities, materialized balances, immutable ledger, and bounded validation contracts. `src/server/inventory` contains transactional posting, trusted-state revalidation, bounded queries, HTTP protection, and the Firebase Admin adapter.
+- Inventory provisioning exposes four operation-specific, server-protected
+  upserts for catalog items, facility locations, lots, and floor-stock
+  thresholds. Each mutation revalidates trusted authority transactionally and
+  commits the target, audit, and payload-bound idempotency marker together. See
+  `docs/inventory-provisioning-foundation.md`.
 
 The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md. The server-protected administration console and its authority matrix are documented in docs/trusted-administration-console.md.
 
@@ -115,7 +120,7 @@ The trusted administration console is available under `/app/admin` only after th
 - Production session retention cleanup, global session-management UI, rate limiting, and monitoring
 - Production Firebase configuration or deployment
 - Floor-stock requests, cabinet/shelf workflows, crash carts, public QR pages, controlled medicines, printing, and deployment
-- Inventory catalog/location/lot provisioning UI, reservation, replenishment, costing, and reporting
+- Inventory bulk import/deletion, reservation, replenishment, costing, and reporting
 
 ## Local commands
 

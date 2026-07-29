@@ -44,6 +44,8 @@ export const resourceIds = [
   "controlled_medicines",
   "inventory_item",
   "inventory_location",
+  "inventory_lot",
+  "floor_stock_configuration",
   "inventory_stock",
   "inventory_balance",
   "inventory_transaction",
