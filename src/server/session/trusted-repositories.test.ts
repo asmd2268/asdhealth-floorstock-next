@@ -11,6 +11,11 @@ const profile = {
   accountStatus: "active",
   explicitPermissionOverrides: [],
 };
+const normalizedProfile = {
+  ...profile,
+  departmentIds: [],
+  activeDepartmentId: null,
+};
 const assignment = {
   uid: "user-1",
   tenantId: "tenant-1",
@@ -36,6 +41,7 @@ const directory = {
     inventory: false,
   },
 };
+const normalizedDirectory = { ...directory, departments: [] };
 
 function firestore(values: {
   profile?: unknown;
@@ -73,14 +79,14 @@ describe("server trusted repository adapters", () => {
     const sdk = firestore({});
     const repositories = createServerTrustedRepositoryAdapters(sdk as never);
     await expect(repositories.userProfiles.getByUid("user-1")).resolves.toEqual(
-      profile,
+      normalizedProfile,
     );
     await expect(
       repositories.roleAssignments.listByUid("user-1", "tenant-1"),
     ).resolves.toEqual([assignment]);
     await expect(
       repositories.tenantDirectories.getByTenantId("tenant-1"),
-    ).resolves.toEqual(directory);
+    ).resolves.toEqual(normalizedDirectory);
     expect(sdk.doc).toHaveBeenNthCalledWith(1, "userProfiles/user-1");
     expect(sdk.collection).toHaveBeenCalledWith(
       "userRoleAssignments/user-1/assignments",

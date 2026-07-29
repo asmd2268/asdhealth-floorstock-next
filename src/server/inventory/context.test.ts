@@ -25,6 +25,8 @@ const session = {
         organizationId: "org-1",
         facilityIds: ["facility-1"],
         activeFacilityId: "facility-1",
+        departmentIds: [],
+        activeDepartmentId: null,
         activeScope: scope,
         roleAssignments: [{ role: "pharmacy_manager", scope }],
         explicitPermissionOverrides: [],

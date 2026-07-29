@@ -24,6 +24,18 @@ const directory = {
     { id: "facility-1", organizationId: "organization-1" },
     { id: "facility-2", organizationId: "organization-1" },
   ],
+  departments: [
+    {
+      id: "department-1",
+      organizationId: "organization-1",
+      facilityId: "facility-1",
+    },
+    {
+      id: "department-2",
+      organizationId: "organization-1",
+      facilityId: "facility-2",
+    },
+  ],
   featureFlags: {
     announcements: true,
     zebra_labels: true,
@@ -197,6 +209,125 @@ describe("session resolver", () => {
     }
   });
 
+  it("resolves only a trusted department membership in the active facility", () => {
+    const result = resolveSession(
+      input({
+        profile: {
+          ...profile,
+          facilityIds: ["facility-1", "facility-2"],
+          departmentIds: ["department-2", "department-1"],
+          activeDepartmentId: "department-1",
+        },
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      user: {
+        departmentIds: ["department-1", "department-2"],
+        activeDepartmentId: "department-1",
+      },
+    });
+  });
+
+  it("fails closed for invalid or missing department-user membership", () => {
+    const departmentAssignment = {
+      ...assignment,
+      roleId: "department_user",
+    } as const;
+    expect(
+      reason(
+        resolveSession(
+          input({
+            profile: {
+              ...profile,
+              departmentIds: ["department-2"],
+              activeDepartmentId: "department-2",
+            },
+            roleAssignments: [departmentAssignment],
+          }),
+        ),
+      ),
+    ).toBe("department_mismatch");
+    expect(
+      reason(
+        resolveSession(input({ roleAssignments: [departmentAssignment] })),
+      ),
+    ).toBe("active_department_invalid");
+  });
+
+  it("rejects a trusted default department outside the trusted default facility", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            profile: {
+              ...profile,
+              facilityIds: ["facility-1", "facility-2"],
+              departmentIds: ["department-1", "department-2"],
+              activeDepartmentId: "department-2",
+            },
+          }),
+        ),
+      ),
+    ).toBe("active_department_invalid");
+  });
+
+  it("selects an in-facility department when switching facilities", () => {
+    const result = resolveSession(
+      input({
+        requestedActiveFacilityId: "facility-2",
+        profile: {
+          ...profile,
+          facilityIds: ["facility-1", "facility-2"],
+          departmentIds: ["department-1", "department-2"],
+          activeDepartmentId: "department-1",
+        },
+        roleAssignments: [
+          assignment,
+          {
+            ...assignment,
+            roleId: "department_user",
+            scope: { ...facilityScope, facilityId: "facility-2" },
+          },
+        ],
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      user: {
+        activeFacilityId: "facility-2",
+        activeDepartmentId: "department-2",
+      },
+    });
+  });
+
+  it("rejects malformed department directories and duplicate memberships", () => {
+    expect(
+      reason(
+        resolveSession(
+          input({
+            tenantDirectory: {
+              ...directory,
+              departments: [directory.departments[0], directory.departments[0]],
+            },
+          }),
+        ),
+      ),
+    ).toBe("department_mismatch");
+    expect(
+      reason(
+        resolveSession(
+          input({
+            profile: {
+              ...profile,
+              departmentIds: ["department-1", "department-1"],
+            },
+          }),
+        ),
+      ),
+    ).toBe("department_mismatch");
+  });
+
   it("fails closed instead of falling back when a requested facility is stale", () => {
     expect(
       reason(
@@ -262,6 +393,7 @@ describe("session resolver", () => {
         },
         tenantDirectory: {
           ...directory,
+          departments: [],
           facilities: ["facility-z", "facility-A", "facility-10"].map((id) => ({
             id,
             organizationId: "organization-1",
@@ -433,6 +565,7 @@ describe("session resolver", () => {
               facilities: [
                 { id: "facility-1", organizationId: "organization-2" },
               ],
+              departments: [],
             },
           }),
         ),

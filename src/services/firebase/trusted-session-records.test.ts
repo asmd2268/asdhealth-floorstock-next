@@ -46,9 +46,11 @@ export const validTenantDocument = {
 
 describe("trusted session record validation", () => {
   it("normalizes a complete valid user profile", () => {
-    expect(parseTrustedUserProfile(validProfileDocument)).toEqual(
-      validProfileDocument,
-    );
+    expect(parseTrustedUserProfile(validProfileDocument)).toEqual({
+      ...validProfileDocument,
+      departmentIds: [],
+      activeDepartmentId: null,
+    });
   });
 
   it("preserves disabled account status for fail-closed session resolution", () => {
@@ -137,9 +139,48 @@ describe("trusted session record validation", () => {
   });
 
   it("normalizes a complete tenant directory", () => {
-    expect(parseTrustedTenantDirectory(validTenantDocument)).toEqual(
-      validTenantDocument,
-    );
+    expect(parseTrustedTenantDirectory(validTenantDocument)).toEqual({
+      ...validTenantDocument,
+      departments: [],
+    });
+  });
+
+  it("validates department parents and active membership", () => {
+    const department = {
+      id: "department-1",
+      organizationId: "organization-1",
+      facilityId: "facility-1",
+      displayName: "Emergency",
+    };
+    expect(
+      parseTrustedTenantDirectory({
+        ...validTenantDocument,
+        departments: [department],
+      }).departments,
+    ).toEqual([department]);
+    expect(
+      parseTrustedUserProfile({
+        ...validProfileDocument,
+        departmentIds: [department.id],
+        activeDepartmentId: department.id,
+      }),
+    ).toMatchObject({
+      departmentIds: [department.id],
+      activeDepartmentId: department.id,
+    });
+    expect(() =>
+      parseTrustedTenantDirectory({
+        ...validTenantDocument,
+        departments: [{ ...department, facilityId: "facility-missing" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseTrustedUserProfile({
+        ...validProfileDocument,
+        departmentIds: [],
+        activeDepartmentId: department.id,
+      }),
+    ).toThrow();
   });
 
   it("accepts a bounded safe facility display name and rejects unsafe labels", () => {

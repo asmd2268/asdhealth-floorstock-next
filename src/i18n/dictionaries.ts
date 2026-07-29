@@ -170,6 +170,7 @@ export interface Dictionary {
     overview: string;
     users: string;
     facilities: string;
+    departments: string;
     features: string;
     audit: string;
     accessDenied: string;
@@ -182,6 +183,8 @@ export interface Dictionary {
     facility: string;
     facilitiesLabel: string;
     activeFacility: string;
+    departmentsLabel: string;
+    activeDepartment: string;
     accountStatus: string;
     active: string;
     disabled: string;
@@ -201,8 +204,10 @@ export interface Dictionary {
     confirmDeactivate: string;
     cancel: string;
     facilityId: string;
+    departmentId: string;
     displayName: string;
     createOrUpdate: string;
+    createOrUpdateDepartment: string;
     enabled: string;
     disabledFlag: string;
     replaceFeatures: string;
@@ -405,6 +410,7 @@ const en: Dictionary = {
     overview: "Overview",
     users: "Users",
     facilities: "Facilities",
+    departments: "Departments",
     features: "Feature flags",
     audit: "Audit",
     accessDenied: "Administration access is not available for this account.",
@@ -417,6 +423,8 @@ const en: Dictionary = {
     facility: "Facility",
     facilitiesLabel: "Facility memberships",
     activeFacility: "Active facility",
+    departmentsLabel: "Department memberships",
+    activeDepartment: "Active department",
     accountStatus: "Account status",
     active: "Active",
     disabled: "Disabled",
@@ -436,8 +444,10 @@ const en: Dictionary = {
     confirmDeactivate: "Confirm account deactivation",
     cancel: "Cancel",
     facilityId: "Facility ID",
+    departmentId: "Department ID",
     displayName: "Display name",
     createOrUpdate: "Create or update facility",
+    createOrUpdateDepartment: "Create or update department",
     enabled: "Enabled",
     disabledFlag: "Disabled",
     replaceFeatures: "Replace feature flags",
@@ -463,6 +473,7 @@ const en: Dictionary = {
     actions: {
       create_tenant: "Create tenant",
       upsert_facility: "Create or update facility",
+      upsert_department: "Create or update department",
       upsert_user_profile: "Update user profile",
       set_account_status: "Change account status",
       assign_role: "Assign role",
@@ -472,6 +483,7 @@ const en: Dictionary = {
     targetTypes: {
       tenant: "Tenant",
       facility: "Facility",
+      department: "Department",
       user_profile: "User profile",
       account: "Account",
       role_assignment: "Role assignment",
@@ -663,6 +675,7 @@ const ar: Dictionary = {
     overview: "نظرة عامة",
     users: "المستخدمون",
     facilities: "المنشآت",
+    departments: "الأقسام",
     features: "علامات الميزات",
     audit: "سجل التدقيق",
     accessDenied: "الوصول إلى الإدارة غير متاح لهذا الحساب.",
@@ -675,6 +688,8 @@ const ar: Dictionary = {
     facility: "المنشأة",
     facilitiesLabel: "عضويات المنشآت",
     activeFacility: "المنشأة النشطة",
+    departmentsLabel: "عضويات الأقسام",
+    activeDepartment: "القسم النشط",
     accountStatus: "حالة الحساب",
     active: "نشط",
     disabled: "معطل",
@@ -694,8 +709,10 @@ const ar: Dictionary = {
     confirmDeactivate: "تأكيد تعطيل الحساب",
     cancel: "إلغاء",
     facilityId: "معرف المنشأة",
+    departmentId: "معرف القسم",
     displayName: "اسم العرض",
     createOrUpdate: "إنشاء المنشأة أو تحديثها",
+    createOrUpdateDepartment: "إنشاء القسم أو تحديثه",
     enabled: "مفعلة",
     disabledFlag: "معطلة",
     replaceFeatures: "استبدال علامات الميزات",
@@ -718,6 +735,7 @@ const ar: Dictionary = {
     actions: {
       create_tenant: "إنشاء مستأجر",
       upsert_facility: "إنشاء منشأة أو تحديثها",
+      upsert_department: "إنشاء قسم أو تحديثه",
       upsert_user_profile: "تحديث ملف المستخدم",
       set_account_status: "تغيير حالة الحساب",
       assign_role: "تعيين دور",
@@ -727,6 +745,7 @@ const ar: Dictionary = {
     targetTypes: {
       tenant: "المستأجر",
       facility: "المنشأة",
+      department: "القسم",
       user_profile: "ملف المستخدم",
       account: "الحساب",
       role_assignment: "تعيين الدور",

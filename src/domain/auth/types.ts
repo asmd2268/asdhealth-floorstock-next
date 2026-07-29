@@ -29,6 +29,8 @@ export interface UserProfileRecord {
   organizationId?: string | null;
   facilityIds?: readonly string[];
   activeFacilityId?: string | null;
+  departmentIds?: readonly string[];
+  activeDepartmentId?: string | null;
   accountStatus?: AccountStatus;
   explicitPermissionOverrides?: readonly PermissionOverrideRecord[];
 }
@@ -67,12 +69,20 @@ export interface TenantFacilityRecord {
   displayName?: string;
 }
 
+export interface TenantDepartmentRecord {
+  id: string;
+  organizationId: string;
+  facilityId: string;
+  displayName?: string;
+}
+
 export interface TenantDirectory {
   tenantId: string;
   status: "active" | "inactive";
   platformId: string;
   organizations: readonly TenantOrganizationRecord[];
   facilities: readonly TenantFacilityRecord[];
+  departments?: readonly TenantDepartmentRecord[];
   featureFlags?: FeatureFlagSet;
 }
 
@@ -85,6 +95,8 @@ export interface AuthenticatedUser {
   organizationId: string | null;
   facilityIds: readonly string[];
   activeFacilityId: string;
+  departmentIds: readonly string[];
+  activeDepartmentId: string | null;
   activeScope: UserScope;
   roleAssignments: readonly ScopedRoleAssignment[];
   explicitPermissionOverrides: readonly PermissionOverride[];
@@ -104,6 +116,8 @@ export type SessionFailureReason =
   | "organization_mismatch"
   | "facility_mismatch"
   | "active_facility_invalid"
+  | "department_mismatch"
+  | "active_department_invalid"
   | "role_assignment_missing"
   | "role_assignment_mismatch"
   | "unknown_role"

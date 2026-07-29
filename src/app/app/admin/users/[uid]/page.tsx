@@ -122,12 +122,17 @@ export default async function AdministrationUserPage({
             organizationId={user.organizationId}
             facilityIds={user.facilityIds}
             activeFacilityId={user.activeFacilityId}
+            departmentIds={user.departmentIds}
+            activeDepartmentId={user.activeDepartmentId}
             organizations={directory.organizations}
             facilities={directory.facilities}
+            departments={directory.departments}
             labels={{
               organization: labels.organization,
               facilities: labels.facilitiesLabel,
               activeFacility: labels.activeFacility,
+              departments: labels.departmentsLabel,
+              activeDepartment: labels.activeDepartment,
               save: labels.save,
               ...mutationLabels,
             }}

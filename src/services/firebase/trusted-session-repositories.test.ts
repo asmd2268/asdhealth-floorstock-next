@@ -21,6 +21,11 @@ const validProfile = {
   accountStatus: "active",
   explicitPermissionOverrides: [],
 } as const;
+const normalizedProfile = {
+  ...validProfile,
+  departmentIds: [],
+  activeDepartmentId: null,
+} as const;
 
 const validAssignment = {
   uid: identity.uid,
@@ -48,6 +53,7 @@ const validTenant = {
     inventory: false,
   },
 } as const;
+const normalizedTenant = { ...validTenant, departments: [] } as const;
 
 interface ReaderData {
   profile?: unknown | null;
@@ -89,13 +95,13 @@ describe("trusted Firestore session repositories", () => {
 
     await expect(
       repositories.userProfiles.getByUid(identity.uid),
-    ).resolves.toEqual(validProfile);
+    ).resolves.toEqual(normalizedProfile);
     await expect(
       repositories.roleAssignments.listByUid(identity.uid, "tenant-1"),
     ).resolves.toEqual([validAssignment]);
     await expect(
       repositories.tenantDirectories.getByTenantId("tenant-1"),
-    ).resolves.toEqual(validTenant);
+    ).resolves.toEqual(normalizedTenant);
 
     expect(firestore.getDocument).toHaveBeenNthCalledWith(1, [
       "userProfiles",

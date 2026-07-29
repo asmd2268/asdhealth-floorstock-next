@@ -73,6 +73,7 @@ const auditSchema = z
     > = {
       create_tenant: "tenant",
       upsert_facility: "facility",
+      upsert_department: "department",
       upsert_user_profile: "user_profile",
       set_account_status: "account",
       assign_role: "role_assignment",
@@ -125,6 +126,8 @@ function summary(
       organizationId: profile.organizationId ?? null,
       facilityIds: profile.facilityIds,
       activeFacilityId: profile.activeFacilityId ?? null,
+      departmentIds: profile.departmentIds ?? [],
+      activeDepartmentId: profile.activeDepartmentId ?? null,
       accountStatus: profile.accountStatus,
     };
   } catch {

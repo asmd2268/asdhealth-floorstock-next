@@ -8,6 +8,7 @@ import type { FeatureFlagSet } from "@/domain/platform/types";
 export const administrativeActions = [
   "create_tenant",
   "upsert_facility",
+  "upsert_department",
   "upsert_user_profile",
   "set_account_status",
   "assign_role",
@@ -18,6 +19,7 @@ export const administrativeActions = [
 export const provisioningAuditTargetTypes = [
   "tenant",
   "facility",
+  "department",
   "user_profile",
   "account",
   "role_assignment",
@@ -63,6 +65,12 @@ export interface CreateTenantInput {
     organizationId: string;
     displayName?: string;
   }[];
+  departments?: readonly {
+    id: string;
+    organizationId: string;
+    facilityId: string;
+    displayName?: string;
+  }[];
   featureFlags: FeatureFlagSet;
 }
 
@@ -71,12 +79,24 @@ export interface UpsertFacilityInput {
   facility: { id: string; organizationId: string; displayName?: string };
 }
 
+export interface UpsertDepartmentInput {
+  tenantId: string;
+  department: {
+    id: string;
+    organizationId: string;
+    facilityId: string;
+    displayName?: string;
+  };
+}
+
 export interface UpsertUserProfileInput {
   uid: string;
   tenantId: string;
   organizationId: string | null;
   facilityIds: readonly string[];
   activeFacilityId: string | null;
+  departmentIds?: readonly string[];
+  activeDepartmentId?: string | null;
   accountStatus: "active" | "disabled" | "pending" | "suspended";
   explicitPermissionOverrides: readonly PermissionOverrideRecord[];
 }
@@ -93,6 +113,8 @@ export interface UpdateUserMembershipInput {
   organizationId: string;
   facilityIds: readonly string[];
   activeFacilityId: string;
+  departmentIds?: readonly string[];
+  activeDepartmentId?: string | null;
 }
 
 export interface AssignRoleInput {

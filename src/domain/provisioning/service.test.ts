@@ -28,6 +28,13 @@ const tenantDirectory = {
   platformId: "platform-1",
   organizations: [{ id: "organization-1" }],
   facilities: [{ id: "facility-1", organizationId: "organization-1" }],
+  departments: [
+    {
+      id: "department-1",
+      organizationId: "organization-1",
+      facilityId: "facility-1",
+    },
+  ],
   featureFlags,
 } as const;
 
@@ -224,6 +231,55 @@ describe("trusted provisioning service", () => {
         facility: tenantDirectory.facilities[0],
       }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it("provisions departments atomically and locks their facility identity", async () => {
+    const store = seededStore();
+    store.documents.set("tenantDirectories/tenant-1", {
+      ...tenantDirectory,
+      facilities: [
+        ...tenantDirectory.facilities,
+        { id: "facility-other", organizationId: "organization-1" },
+      ],
+    });
+    const service = createService(store);
+    await expect(
+      service.upsertDepartment(context(tenantAdministrator), {
+        tenantId: "tenant-1",
+        department: {
+          id: "department-2",
+          organizationId: "organization-1",
+          facilityId: "facility-1",
+          displayName: "Emergency",
+        },
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(store.documents.get("tenantDirectories/tenant-1")).toMatchObject({
+      departments: [
+        { id: "department-1" },
+        { id: "department-2", displayName: "Emergency" },
+      ],
+    });
+    expect(
+      store.documents.get("provisioningAuditEvents/audit-1"),
+    ).toMatchObject({
+      action: "upsert_department",
+      targetType: "department",
+      targetId: "department-2",
+    });
+
+    const before = new Map(store.documents);
+    await expect(
+      service.upsertDepartment(context(platformOwner, "move-department"), {
+        tenantId: "tenant-1",
+        department: {
+          id: "department-1",
+          organizationId: "organization-1",
+          facilityId: "facility-other",
+        },
+      }),
+    ).resolves.toEqual({ ok: false, code: "conflict" });
+    expect(store.documents).toEqual(before);
   });
 
   it("returns a safe denial for missing or malformed tenant-admin directories", async () => {
@@ -570,6 +626,7 @@ describe("trusted provisioning service", () => {
       tenantId: "tenant-2",
       organizations: [{ id: "organization-2" }],
       facilities: [{ id: "facility-2", organizationId: "organization-2" }],
+      departments: [],
     };
     const store = seededStore();
     store.documents.set("tenantDirectories/tenant-2", secondTenant);
@@ -929,6 +986,55 @@ describe("trusted provisioning service", () => {
       accountStatus: "suspended",
       explicitPermissionOverrides: [deny],
     });
+  });
+
+  it("validates department membership and requires it before assigning the department role", async () => {
+    const store = seededStore();
+    const service = createService(store);
+    await expect(
+      service.assignRole(context(platformOwner), {
+        ...roleAssignment,
+        assignmentId: "department-role-without-membership",
+        roleId: "department_user",
+      }),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+
+    await expect(
+      service.updateUserMembership(context(platformOwner, "add-department"), {
+        uid: "user-1",
+        tenantId: "tenant-1",
+        organizationId: "organization-1",
+        facilityIds: ["facility-1"],
+        activeFacilityId: "facility-1",
+        departmentIds: ["department-1"],
+        activeDepartmentId: "department-1",
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      service.assignRole(context(platformOwner, "assign-department-role"), {
+        ...roleAssignment,
+        assignmentId: "department-role",
+        roleId: "department_user",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(store.documents.get("userProfiles/user-1")).toMatchObject({
+      departmentIds: ["department-1"],
+      activeDepartmentId: "department-1",
+    });
+
+    const before = new Map(store.documents);
+    await expect(
+      service.updateUserMembership(context(platformOwner, "bad-department"), {
+        uid: "user-1",
+        tenantId: "tenant-1",
+        organizationId: "organization-1",
+        facilityIds: ["facility-1"],
+        activeFacilityId: "facility-1",
+        departmentIds: ["department-missing"],
+        activeDepartmentId: "department-missing",
+      }),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+    expect(store.documents).toEqual(before);
   });
 
   it("rejects membership changes that would orphan preserved overrides or roles", async () => {

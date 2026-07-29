@@ -61,6 +61,7 @@ export function filterDirectory(
     return {
       organizations: directory.organizations,
       facilities: directory.facilities,
+      departments: directory.departments ?? [],
     };
   }
   return {
@@ -72,10 +73,16 @@ export function filterDirectory(
         principal.organizationIds.includes(item.organizationId) &&
         principal.facilityIds.includes(item.id),
     ),
+    departments: (directory.departments ?? []).filter(
+      (item) =>
+        principal.organizationIds.includes(item.organizationId) &&
+        principal.facilityIds.includes(item.facilityId),
+    ),
   };
 }
 
 export interface AdministrationDirectoryView {
   organizations: TenantDirectory["organizations"];
   facilities: TenantDirectory["facilities"];
+  departments: NonNullable<TenantDirectory["departments"]>;
 }

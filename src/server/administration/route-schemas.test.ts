@@ -68,6 +68,17 @@ describe("administration mutation schemas", () => {
         organizationId: "org-1",
         facilityIds: [],
         activeFacilityId: "fac-1",
+        departmentIds: [],
+        activeDepartmentId: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      administrationMembershipSchema.safeParse({
+        organizationId: "org-1",
+        facilityIds: ["fac-1"],
+        activeFacilityId: "fac-1",
+        departmentIds: ["dept-1"],
+        activeDepartmentId: "dept-other",
       }).success,
     ).toBe(false);
   });
