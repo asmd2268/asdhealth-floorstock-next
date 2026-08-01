@@ -469,7 +469,7 @@ describe("session resolver", () => {
           targetScope: facilityScope,
           featureFlags: { new_request: true },
         }).allowed,
-      ).toBe(false);
+      ).toBe(true);
     }
   });
 

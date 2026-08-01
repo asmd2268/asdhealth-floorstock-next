@@ -25,6 +25,11 @@ The production application at `floorstock-one.vercel.app` is separate and remain
   thresholds. Each mutation revalidates trusted authority transactionally and
   commits the target, audit, and payload-bound idempotency marker together. See
   `docs/inventory-provisioning-foundation.md`.
+- `src/domain/requests` and `src/server/requests` provide the strict
+  department-to-pharmacy floor-stock request lifecycle, trusted transactional
+  reauthorization, payload-bound idempotency, bounded reads, protected APIs, and
+  an Arabic/English workspace. See
+  `docs/floor-stock-request-foundation.md`.
 
 The provisioning foundation separates pure administrator policy and transactional operations from server-only Firebase Admin initialization, trusted-principal resolution, Firestore adaptation, and HTTP composition. Its architecture is documented in docs/trusted-provisioning.md. The server-protected administration console and its authority matrix are documented in docs/trusted-administration-console.md.
 
@@ -76,7 +81,7 @@ Resolution precedence is:
 5. Apply the role default.
 6. Deny by default.
 
-Announcements and Zebra labels default to the five confirmed pharmacy/master roles. New Request defaults only to `department_user`. Warehouse and department roles do not inherit pharmacy features, and `external_pharmacy_supervisor` has no navigation or feature access by default.
+Announcements and Zebra labels default to the five confirmed pharmacy/master roles. Department users can read, create, submit, and cancel their own active-department requests. Pharmacy roles receive the documented review and/or fulfillment permissions. Warehouse roles do not inherit request permissions, and `external_pharmacy_supervisor` has no navigation or feature access by default.
 
 Controlled medicines currently has typed feature and resource identifiers only. No transfer statuses, stock movement behavior, or final workflow is defined in Phase 1.
 
@@ -102,7 +107,7 @@ Server-session routes additionally require `SERVER_SESSION_ALLOWED_ORIGIN` to be
 
 Firebase validation rejects example placeholders and malformed project, domain, bucket, sender, and app identifiers. Browser initialization uses a named Firebase app and refuses to reuse it if its configuration differs.
 
-Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no browser business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts trusted-session reads to the caller’s own active identity and tenant, explicitly denies browser access to inventory records, and defaults unspecified access to deny. The rules and inventory index foundation are checked in but remain undeployed. No Admin credentials are included.
+Firebase Auth and the trusted one-time Firestore reader initialize only in the browser when the production authentication boundary needs them. The reader is limited to the explicit trusted-session paths documented in `docs/trusted-session-data-model.md`; no browser business collection adapter or listener is added. `firestore.rules` denies all client writes to authorization records, restricts trusted-session reads to the caller’s own active identity and tenant, explicitly denies browser access to inventory and floor-stock request records, and defaults unspecified access to deny. The rules and index foundation are checked in but remain undeployed. No Admin credentials are included.
 
 Trusted identifiers use a canonical printable-ASCII format that rejects whitespace, control/format characters, Unicode lookalikes, and path separators. Validation is bounded to 100 facility memberships, 250 department memberships, 100 explicit overrides, 250 organizations, 2,000 facilities, 10,000 departments, and 50 role assignments. Assignment queries fetch at most one overflow sentinel, and both the adapter and domain resolver independently verify UID and tenant boundaries.
 
@@ -119,7 +124,7 @@ The trusted administration console is available under `/app/admin` only after th
 - Password reset, registration, multi-factor authentication, and account recovery
 - Production session retention cleanup, global session-management UI, rate limiting, and monitoring
 - Production Firebase configuration or deployment
-- Floor-stock requests, cabinet/shelf workflows, crash carts, public QR pages, controlled medicines, printing, and deployment
+- Inventory-linked request fulfillment, partial request quantities, cabinet/shelf workflows, crash carts, public QR pages, controlled medicines, printing, and deployment
 - Inventory bulk import/deletion, reservation, replenishment, costing, and reporting
 
 ## Local commands

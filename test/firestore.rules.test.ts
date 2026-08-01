@@ -144,6 +144,16 @@ beforeEach(async () => {
   });
   await seed("inventoryRequestKeys/request-1", { tenantId });
   await seed("inventoryAuditEvents/event-1", { tenantId });
+  await seed("floorStockRequests/floor-request-1", {
+    tenantId,
+    facilityId: "facility-1",
+    departmentId: "department-1",
+  });
+  await seed("floorStockRequests/floor-request-1/lines/line-1", {
+    itemId: "item-1",
+  });
+  await seed("floorStockRequestKeys/request-1", { tenantId });
+  await seed("floorStockRequestAuditEvents/event-1", { tenantId });
 });
 
 afterAll(async () => {
@@ -171,6 +181,26 @@ describe("Firestore trusted-session rules", () => {
     }
     await expectExplicitDenial(
       getDocs(collection(firestore, "inventoryBalances")),
+    );
+  });
+  it("explicitly denies all browser floor-stock request reads and writes", async () => {
+    const firestore = firestoreFor(activeUid);
+    const paths = [
+      "floorStockRequests/floor-request-1",
+      "floorStockRequests/floor-request-1/lines/line-1",
+      "floorStockRequestKeys/request-1",
+      "floorStockRequestAuditEvents/event-1",
+    ];
+    for (const target of paths) {
+      await expectExplicitDenial(getDoc(doc(firestore, target)));
+      await expectExplicitDenial(setDoc(doc(firestore, target), { tenantId }));
+      await expectExplicitDenial(
+        updateDoc(doc(firestore, target), { tenantId }),
+      );
+      await expectExplicitDenial(deleteDoc(doc(firestore, target)));
+    }
+    await expectExplicitDenial(
+      getDocs(collection(firestore, "floorStockRequests")),
     );
   });
   it("denies unauthenticated trusted-record reads", async () => {

@@ -6,7 +6,7 @@ import {
   resolvePermission,
   resolveScopedPermission,
 } from "./permissions";
-import { roleIds, type PermissionRequest, type RoleId } from "./types";
+import type { PermissionRequest, RoleId } from "./types";
 
 const facilityScope = {
   kind: "facility",
@@ -165,8 +165,22 @@ describe("permission resolution", () => {
     },
   );
 
-  it.each(roleIds.filter((role) => role !== "department_user"))(
-    "hides new request from %s by default",
+  it.each(pharmacyFeatureRoles)(
+    "allows request review visibility for %s by default",
+    (role) => {
+      expect(
+        can({
+          ...baseRequest,
+          role,
+          resource: "new_request",
+          featureFlags: { new_request: true },
+        }),
+      ).toBe(true);
+    },
+  );
+
+  it.each(["warehouse_manager", "external_pharmacy_supervisor"] as const)(
+    "hides requests from %s by default",
     (role) => {
       expect(
         can({
@@ -179,8 +193,8 @@ describe("permission resolution", () => {
     },
   );
 
-  it("allows department users to read and create new requests", () => {
-    for (const action of ["read", "create"] as const) {
+  it("allows department users to manage their request lifecycle", () => {
+    for (const action of ["read", "create", "edit", "delete"] as const) {
       expect(
         can({
           ...baseRequest,
