@@ -54,6 +54,8 @@ export interface FloorStockRequestRecord {
   readyAt: string | null;
   deliveredAt: string | null;
   cancelledAt: string | null;
+  inventoryTransactionId: string | null;
+  fulfillmentSourceLocationId: string | null;
 }
 
 export interface FloorStockRequestLineRecord {
@@ -68,6 +70,7 @@ export interface FloorStockRequestLineRecord {
   requestedQuantity: number;
   approvedQuantity: number | null;
   fulfilledQuantity: number | null;
+  inventoryTransactionLineIds: readonly string[];
 }
 
 export interface FloorStockRequestAuditRecord {
@@ -107,6 +110,21 @@ export interface CreateFloorStockRequestInput {
   lines: readonly CreateFloorStockRequestLineInput[];
 }
 
+export interface CompleteFloorStockRequestAllocationInput {
+  balanceId: string;
+  quantity: number;
+}
+
+export interface CompleteFloorStockRequestLineInput {
+  requestLineId: string;
+  allocations: readonly CompleteFloorStockRequestAllocationInput[];
+}
+
+export interface CompleteFloorStockRequestInput {
+  sourceLocationId: string;
+  lines: readonly CompleteFloorStockRequestLineInput[];
+}
+
 export interface FloorStockRequestActorContext {
   uid: string;
   tenantId: string;
@@ -129,6 +147,8 @@ export type FloorStockRequestFailureCode =
   | "conflict"
   | "inactive_configuration"
   | "inactive_item"
+  | "insufficient_stock"
+  | "expired_lot"
   | "provider_unavailable";
 
 export type FloorStockRequestResult<T> =
@@ -165,4 +185,29 @@ export interface FloorStockRequestConfigurationSummary {
 export interface FloorStockRequestPage {
   items: readonly FloorStockRequestSummary[];
   nextCursor: string | null;
+}
+
+export interface FloorStockRequestFulfillmentBalanceOption {
+  balanceId: string;
+  sourceLocationId: string;
+  sourceLocationName: string;
+  lotNumber: string | null;
+  expiryDate: string | null;
+  availableQuantity: number;
+}
+
+export interface FloorStockRequestFulfillmentLine {
+  requestLineId: string;
+  itemCode: string;
+  genericName: string;
+  strength: string;
+  destinationLocationName: string;
+  unit: InventoryUnit;
+  approvedQuantity: number;
+  options: readonly FloorStockRequestFulfillmentBalanceOption[];
+}
+
+export interface FloorStockRequestFulfillmentDetail {
+  floorStockRequestId: string;
+  lines: readonly FloorStockRequestFulfillmentLine[];
 }

@@ -284,6 +284,14 @@ export const inventoryTransactionLineSchema = z
       .int()
       .positive()
       .max(INVENTORY_MAX_BALANCE_QUANTITY),
+    sourceLocationId: provisioningIdentifierSchema.nullable().default(null),
+    destinationLocationId: provisioningIdentifierSchema
+      .nullable()
+      .default(null),
+    floorStockRequestId: provisioningIdentifierSchema.nullable().default(null),
+    floorStockRequestLineId: provisioningIdentifierSchema
+      .nullable()
+      .default(null),
   })
   .strict();
 

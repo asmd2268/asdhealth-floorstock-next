@@ -53,6 +53,62 @@ export const createFloorStockRequestSchema = z
 
 export const emptyFloorStockRequestBodySchema = z.object({}).strict();
 
+export const completeFloorStockRequestSchema = z
+  .object({
+    sourceLocationId: provisioningIdentifierSchema,
+    lines: z
+      .array(
+        z
+          .object({
+            requestLineId: provisioningIdentifierSchema,
+            allocations: z
+              .array(
+                z
+                  .object({
+                    balanceId: provisioningIdentifierSchema,
+                    quantity: inventoryQuantitySchema,
+                  })
+                  .strict(),
+              )
+              .min(1)
+              .max(INVENTORY_MAX_LINES),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(INVENTORY_MAX_LINES),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      new Set(value.lines.map((line) => line.requestLineId)).size !==
+      value.lines.length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["lines"],
+        message: "Request lines must be unique.",
+      });
+    const allocations = value.lines.flatMap((line) => line.allocations);
+    if (allocations.length > INVENTORY_MAX_LINES)
+      context.addIssue({
+        code: "custom",
+        path: ["lines"],
+        message: "Too many allocations.",
+      });
+    for (const [index, line] of value.lines.entries()) {
+      if (
+        new Set(line.allocations.map((allocation) => allocation.balanceId))
+          .size !== line.allocations.length
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["lines", index, "allocations"],
+          message: "Allocation balances must be unique within a request line.",
+        });
+    }
+  });
+
 export const floorStockRequestRecordSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -77,6 +133,12 @@ export const floorStockRequestRecordSchema = z
     readyAt: inventoryTimestampSchema.nullable(),
     deliveredAt: inventoryTimestampSchema.nullable(),
     cancelledAt: inventoryTimestampSchema.nullable(),
+    inventoryTransactionId: provisioningIdentifierSchema
+      .nullable()
+      .default(null),
+    fulfillmentSourceLocationId: provisioningIdentifierSchema
+      .nullable()
+      .default(null),
   })
   .strict()
   .superRefine((request, context) => {
@@ -129,6 +191,20 @@ export const floorStockRequestRecordSchema = z
           message: `Unexpected ${field} for ${request.status}.`,
         });
     }
+    const requiresInventory =
+      request.status === "ready" || request.status === "delivered";
+    if (requiresInventory !== (request.inventoryTransactionId !== null))
+      context.addIssue({
+        code: "custom",
+        path: ["inventoryTransactionId"],
+        message: "Inventory transaction must match lifecycle state.",
+      });
+    if (requiresInventory !== (request.fulfillmentSourceLocationId !== null))
+      context.addIssue({
+        code: "custom",
+        path: ["fulfillmentSourceLocationId"],
+        message: "Fulfillment source must match lifecycle state.",
+      });
   });
 
 export const floorStockRequestLineRecordSchema = z
@@ -149,8 +225,23 @@ export const floorStockRequestLineRecordSchema = z
       .nonnegative()
       .max(1_000_000_000)
       .nullable(),
+    inventoryTransactionLineIds: z
+      .array(provisioningIdentifierSchema)
+      .max(INVENTORY_MAX_LINES)
+      .default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((line, context) => {
+    if (
+      (line.fulfilledQuantity !== null) !==
+      line.inventoryTransactionLineIds.length > 0
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["inventoryTransactionLineIds"],
+        message: "Inventory lines must match fulfillment state.",
+      });
+  });
 
 export const floorStockRequestOperationSchema = z.enum(
   floorStockRequestOperations,

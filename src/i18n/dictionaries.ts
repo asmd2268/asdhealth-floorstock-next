@@ -115,6 +115,14 @@ export interface Dictionary {
     deliver: string;
     cancel: string;
     working: string;
+    fulfillmentTitle: string;
+    fulfillmentDescription: string;
+    sourceBalance: string;
+    available: string;
+    lot: string;
+    expiry: string;
+    noStock: string;
+    backToRequests: string;
     statuses: Record<
       | "draft"
       | "submitted"
@@ -200,6 +208,7 @@ export interface Dictionary {
       | "issue"
       | "adjustment_increase"
       | "adjustment_decrease"
+      | "request_fulfillment"
       | "transfer",
       string
     >;
@@ -398,6 +407,15 @@ const en: Dictionary = {
     deliver: "Confirm delivery",
     cancel: "Cancel",
     working: "Working…",
+    fulfillmentTitle: "Allocate inventory",
+    fulfillmentDescription:
+      "Choose pharmacy balances and allocate the exact approved quantity for every line.",
+    sourceBalance: "Source balance",
+    available: "Available",
+    lot: "Lot",
+    expiry: "Expiry",
+    noStock: "No eligible stock is available for this line.",
+    backToRequests: "Back to requests",
     statuses: {
       draft: "Draft",
       submitted: "Submitted",
@@ -484,6 +502,7 @@ const en: Dictionary = {
       issue: "Issue",
       adjustment_increase: "Adjustment increase",
       adjustment_decrease: "Adjustment decrease",
+      request_fulfillment: "Request fulfillment",
       transfer: "Transfer",
     },
   },
@@ -706,6 +725,15 @@ const ar: Dictionary = {
     deliver: "تأكيد التسليم",
     cancel: "إلغاء",
     working: "جارٍ التنفيذ…",
+    fulfillmentTitle: "تخصيص المخزون",
+    fulfillmentDescription:
+      "اختر أرصدة الصيدلية وخصص الكمية المعتمدة كاملة لكل بند.",
+    sourceBalance: "رصيد المصدر",
+    available: "المتاح",
+    lot: "التشغيلة",
+    expiry: "الانتهاء",
+    noStock: "لا يوجد مخزون مؤهل لهذا البند.",
+    backToRequests: "العودة إلى الطلبات",
     statuses: {
       draft: "مسودة",
       submitted: "مُرسل",
@@ -791,6 +819,7 @@ const ar: Dictionary = {
       issue: "صرف",
       adjustment_increase: "تسوية بالزيادة",
       adjustment_decrease: "تسوية بالنقص",
+      request_fulfillment: "صرف طلب مخزون القسم",
       transfer: "نقل",
     },
   },

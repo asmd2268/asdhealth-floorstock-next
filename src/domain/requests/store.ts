@@ -6,6 +6,12 @@ import type {
   FloorStockRequestOperation,
   FloorStockRequestRecord,
 } from "./types";
+import type {
+  InventoryAuditEventRecord,
+  InventoryBalanceRecord,
+  InventoryTransactionLineRecord,
+  InventoryTransactionRecord,
+} from "@/domain/inventory/types";
 
 export interface FloorStockRequestTransaction {
   revalidateActor(
@@ -16,6 +22,8 @@ export interface FloorStockRequestTransaction {
   getConfiguration(configurationId: string): Promise<unknown | null>;
   getItem(itemId: string): Promise<unknown | null>;
   getLocation(locationId: string): Promise<unknown | null>;
+  getLot(lotId: string): Promise<unknown | null>;
+  getBalance(balanceId: string): Promise<unknown | null>;
   getIdempotency(namespaceId: string): Promise<unknown | null>;
   listLines(
     floorStockRequestId: string,
@@ -27,6 +35,10 @@ export interface FloorStockRequestTransaction {
   setLine(record: FloorStockRequestLineRecord): void;
   createAudit(record: FloorStockRequestAuditRecord): void;
   createIdempotency(record: FloorStockRequestIdempotencyRecord): void;
+  createInventoryTransaction(record: InventoryTransactionRecord): void;
+  createInventoryLine(record: InventoryTransactionLineRecord): void;
+  setInventoryBalance(record: InventoryBalanceRecord): void;
+  createInventoryAudit(record: InventoryAuditEventRecord): void;
 }
 
 export interface FloorStockRequestStore {

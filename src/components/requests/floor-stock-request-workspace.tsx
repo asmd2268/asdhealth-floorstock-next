@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import type {
   FloorStockRequestConfigurationSummary,
@@ -144,11 +145,6 @@ export function FloorStockRequestWorkspace({
         operation: "start_fulfillment",
         label: labels.startFulfillment,
       });
-    if (mayManage && request.status === "fulfilling")
-      actions.push({
-        operation: "complete_fulfillment",
-        label: labels.completeFulfillment,
-      });
     if (mayManage && request.status === "ready")
       actions.push({ operation: "deliver", label: labels.deliver });
     return actions;
@@ -256,6 +252,13 @@ export function FloorStockRequestWorkspace({
                               : action.label}
                           </button>
                         ))}
+                        {mayManage && request.status === "fulfilling" ? (
+                          <Link
+                            href={`/app/requests/${encodeURIComponent(request.floorStockRequestId)}`}
+                          >
+                            {labels.completeFulfillment}
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
