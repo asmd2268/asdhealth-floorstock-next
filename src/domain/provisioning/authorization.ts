@@ -5,6 +5,7 @@ export const allowedAdministrativeActions = {
   platform_owner: [
     "create_tenant",
     "upsert_facility",
+    "upsert_department",
     "upsert_user_profile",
     "set_account_status",
     "assign_role",
@@ -13,6 +14,7 @@ export const allowedAdministrativeActions = {
   ],
   tenant_admin_unrestricted: [
     "upsert_facility",
+    "upsert_department",
     "upsert_user_profile",
     "set_account_status",
     "assign_role",
@@ -21,6 +23,7 @@ export const allowedAdministrativeActions = {
   ],
   tenant_admin_restricted: [
     "upsert_facility",
+    "upsert_department",
     "upsert_user_profile",
     "set_account_status",
     "assign_role",

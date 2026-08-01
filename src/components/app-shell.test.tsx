@@ -22,6 +22,8 @@ const authenticatedUser: AuthenticatedUser = {
   organizationId: demoFacilityScope.organizationId,
   facilityIds: [demoFacilityScope.facilityId],
   activeFacilityId: demoFacilityScope.facilityId,
+  departmentIds: [],
+  activeDepartmentId: null,
   activeScope: demoFacilityScope,
   roleAssignments: [{ role: "pharmacy_manager", scope: demoFacilityScope }],
   explicitPermissionOverrides: [],

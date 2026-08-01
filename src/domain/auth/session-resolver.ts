@@ -232,6 +232,18 @@ export function resolveSession(
   if (new Set(directoryFacilityIds).size !== directoryFacilityIds.length) {
     return denied("facility_mismatch");
   }
+  const departments = tenantDirectory.departments ?? [];
+  const directoryDepartmentIds = departments.map((department) => department.id);
+  if (new Set(directoryDepartmentIds).size !== directoryDepartmentIds.length) {
+    return denied("department_mismatch");
+  }
+  for (const department of departments) {
+    const facility = tenantDirectory.facilities.find(
+      (candidate) => candidate.id === department.facilityId,
+    );
+    if (!facility || facility.organizationId !== department.organizationId)
+      return denied("department_mismatch");
+  }
 
   const featureFlags = resolveFeatureFlags(tenantDirectory.featureFlags);
   if (!featureFlags) return denied("feature_flags_missing");
@@ -290,6 +302,49 @@ export function resolveSession(
   );
   if (!activeFacility) return denied("active_facility_invalid");
 
+  const profileDepartmentIds = profile.departmentIds ?? [];
+  if (new Set(profileDepartmentIds).size !== profileDepartmentIds.length)
+    return denied("department_mismatch");
+  const uniqueDepartmentIds = [...profileDepartmentIds].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  for (const departmentId of uniqueDepartmentIds) {
+    const department = departments.find(
+      (candidate) => candidate.id === departmentId,
+    );
+    if (
+      !department ||
+      !uniqueFacilityIds.includes(department.facilityId) ||
+      (organizationId && department.organizationId !== organizationId)
+    )
+      return denied("department_mismatch");
+  }
+  const preferredDepartmentId = profile.activeDepartmentId ?? null;
+  if (
+    preferredDepartmentId !== null &&
+    !uniqueDepartmentIds.includes(preferredDepartmentId)
+  )
+    return denied("active_department_invalid");
+  const preferredDepartment = preferredDepartmentId
+    ? departments.find((department) => department.id === preferredDepartmentId)
+    : null;
+  if (preferredDepartmentId && !preferredDepartment)
+    return denied("active_department_invalid");
+  if (
+    preferredDepartment &&
+    requestedActiveFacilityId === undefined &&
+    preferredDepartment.facilityId !== activeFacilityId
+  )
+    return denied("active_department_invalid");
+  const activeDepartmentId =
+    preferredDepartment && preferredDepartment.facilityId === activeFacilityId
+      ? preferredDepartment.id
+      : (uniqueDepartmentIds.find(
+          (departmentId) =>
+            departments.find((department) => department.id === departmentId)
+              ?.facilityId === activeFacilityId,
+        ) ?? null);
+
   const facilitySet = new Set(uniqueFacilityIds);
   const validatedAssignments = validateRoleAssignments(
     roleAssignments,
@@ -300,6 +355,16 @@ export function resolveSession(
     organizationId,
   );
   if (!validatedAssignments.ok) return denied(validatedAssignments.reason);
+  const hasActiveDepartmentRole = validatedAssignments.assignments.some(
+    (assignment) =>
+      assignment.role === "department_user" &&
+      (assignment.scope.kind === "platform" ||
+        assignment.scope.kind === "organization" ||
+        (assignment.scope.kind === "facility" &&
+          assignment.scope.facilityId === activeFacilityId)),
+  );
+  if (hasActiveDepartmentRole && activeDepartmentId === null)
+    return denied("active_department_invalid");
 
   const validatedOverrides = validateOverrides(
     profile.explicitPermissionOverrides ?? [],
@@ -328,6 +393,8 @@ export function resolveSession(
       organizationId,
       facilityIds: uniqueFacilityIds,
       activeFacilityId,
+      departmentIds: uniqueDepartmentIds,
+      activeDepartmentId,
       activeScope,
       roleAssignments: validatedAssignments.assignments,
       explicitPermissionOverrides: validatedOverrides,

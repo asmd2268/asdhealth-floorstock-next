@@ -32,6 +32,19 @@ export const facilityBodySchema = z
   })
   .strict();
 
+export const departmentBodySchema = z
+  .object({
+    organizationId: provisioningIdentifierSchema,
+    facilityId: provisioningIdentifierSchema,
+    displayName: z
+      .string()
+      .min(1)
+      .max(120)
+      .refine((value) => value === value.trim() && !/\p{C}/u.test(value))
+      .optional(),
+  })
+  .strict();
+
 export const userProfileBodySchema = z
   .object({
     tenantId: provisioningIdentifierSchema,
@@ -41,6 +54,11 @@ export const userProfileBodySchema = z
       .min(1)
       .max(trustedSessionLimits.facilityMemberships),
     activeFacilityId: provisioningIdentifierSchema.nullable(),
+    departmentIds: z
+      .array(provisioningIdentifierSchema)
+      .max(trustedSessionLimits.departmentMemberships)
+      .optional(),
+    activeDepartmentId: provisioningIdentifierSchema.nullable().optional(),
     accountStatus: z.enum(accountStatuses),
     explicitPermissionOverrides: z
       .array(permissionOverrideSchema)

@@ -37,6 +37,8 @@ const successfulSession: SessionResolutionResult = {
     organizationId: scope.organizationId,
     facilityIds: [scope.facilityId],
     activeFacilityId: scope.facilityId,
+    departmentIds: [],
+    activeDepartmentId: null,
     activeScope: scope,
     roleAssignments: [{ role: "pharmacy_staff", scope }],
     explicitPermissionOverrides: [],

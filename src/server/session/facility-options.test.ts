@@ -13,6 +13,8 @@ const user: AuthenticatedUser = {
   organizationId: "organization-1",
   facilityIds: ["facility-1", "facility-2"],
   activeFacilityId: "facility-1",
+  departmentIds: [],
+  activeDepartmentId: null,
   activeScope: {
     kind: "facility",
     platformId: "platform-1",

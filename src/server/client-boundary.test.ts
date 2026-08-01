@@ -134,7 +134,7 @@ describe("Firebase Admin client boundary", () => {
     const adminRoutes = sourceFiles(
       join(process.cwd(), "src/app/api/admin"),
     ).map((file) => readFileSync(file, "utf8"));
-    expect(adminRoutes).toHaveLength(6);
+    expect(adminRoutes).toHaveLength(7);
     for (const source of adminRoutes) {
       expect(source).toContain("handleAdministrationMutation");
       expect(source).toContain("getAdministrationProvisioningService");

@@ -75,6 +75,11 @@ const userProfileSchema = z
       .min(1)
       .max(trustedSessionLimits.facilityMemberships),
     activeFacilityId: trustedId.nullable(),
+    departmentIds: z
+      .array(trustedId)
+      .max(trustedSessionLimits.departmentMemberships)
+      .default([]),
+    activeDepartmentId: trustedId.nullable().default(null),
     accountStatus: z.enum(accountStatuses),
     explicitPermissionOverrides: z
       .array(permissionOverride)
@@ -87,6 +92,23 @@ const userProfileSchema = z
         code: "custom",
         message: "Facility membership identifiers must be unique.",
         path: ["facilityIds"],
+      });
+    }
+    if (new Set(profile.departmentIds).size !== profile.departmentIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Department membership identifiers must be unique.",
+        path: ["departmentIds"],
+      });
+    }
+    if (
+      profile.activeDepartmentId !== null &&
+      !profile.departmentIds.includes(profile.activeDepartmentId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Active department must be an allowed department.",
+        path: ["activeDepartmentId"],
       });
     }
   });
@@ -131,6 +153,19 @@ const tenantDirectorySchema = z
       )
       .min(1)
       .max(trustedSessionLimits.tenantFacilities),
+    departments: z
+      .array(
+        z
+          .object({
+            id: trustedId,
+            organizationId: trustedId,
+            facilityId: trustedId,
+            displayName: safeDisplayName.optional(),
+          })
+          .strict(),
+      )
+      .max(trustedSessionLimits.tenantDepartments)
+      .default([]),
     featureFlags: featureFlagsSchema,
   })
   .strict()
@@ -163,6 +198,29 @@ const tenantDirectorySchema = z
           code: "custom",
           message: "Facility organization must exist in the tenant directory.",
           path: ["facilities", index, "organizationId"],
+        });
+      }
+    });
+
+    const departmentIds = new Set(
+      directory.departments.map((department) => department.id),
+    );
+    if (departmentIds.size !== directory.departments.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Department identifiers must be unique.",
+        path: ["departments"],
+      });
+    }
+    directory.departments.forEach((department, index) => {
+      const facility = directory.facilities.find(
+        (candidate) => candidate.id === department.facilityId,
+      );
+      if (!facility || facility.organizationId !== department.organizationId) {
+        context.addIssue({
+          code: "custom",
+          message: "Department facility and organization must match.",
+          path: ["departments", index],
         });
       }
     });

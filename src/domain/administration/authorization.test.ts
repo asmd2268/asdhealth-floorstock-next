@@ -68,6 +68,7 @@ describe("administration read authorization", () => {
     expect(filterDirectory(restricted, directory)).toEqual({
       organizations: [{ id: "org-1" }],
       facilities: [{ id: "fac-1", organizationId: "org-1" }],
+      departments: [],
     });
     expect(
       isProfileVisible(restricted, {

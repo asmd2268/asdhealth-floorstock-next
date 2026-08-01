@@ -22,6 +22,15 @@ const directory = {
     { id: "fac-1", organizationId: "org-1", displayName: "One" },
     { id: "fac-2", organizationId: "org-2" },
   ],
+  departments: [
+    {
+      id: "dept-1",
+      organizationId: "org-1",
+      facilityId: "fac-1",
+      displayName: "Emergency",
+    },
+    { id: "dept-2", organizationId: "org-2", facilityId: "fac-2" },
+  ],
   featureFlags: flags,
 };
 const profile = (
@@ -109,6 +118,8 @@ describe("administration query service", () => {
             organizationId: "org-1",
             facilityIds: ["fac-1"],
             activeFacilityId: "fac-1",
+            departmentIds: [],
+            activeDepartmentId: null,
             accountStatus: "active",
           },
         ],
@@ -142,6 +153,14 @@ describe("administration query service", () => {
         organizations: [{ id: "org-1" }],
         facilities: [
           { id: "fac-1", organizationId: "org-1", displayName: "One" },
+        ],
+        departments: [
+          {
+            id: "dept-1",
+            organizationId: "org-1",
+            facilityId: "fac-1",
+            displayName: "Emergency",
+          },
         ],
       },
     });

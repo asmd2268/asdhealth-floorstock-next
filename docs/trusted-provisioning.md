@@ -30,7 +30,7 @@ The document UID must match the verified Firebase UID and must validate as one o
 
 Tenant administrators are usable only while their trusted tenant directory exists, validates, is active, and matches their platform and tenant. This is enforced during principal resolution and again inside each service transaction; failures return only `forbidden`. Platform owners retain the action matrix's platform-level authority, including administration of inactive tenants, and remain platform-bound.
 
-Restricted tenant administrators may administer only users, roles, overrides, and existing facilities inside both their assigned organization and facility sets. They may create a facility inside an assigned organization, but creation does not mutate their principal or automatically add the new facility to their manageable facility set. Tenant-wide feature-flag replacement requires an unrestricted tenant administrator or platform owner. Unrestricted tenant administrators remain limited to their own active tenant and platform. Administrators cannot modify their own profile, account status, or role assignments through this service.
+Restricted tenant administrators may administer only users, roles, overrides, existing facilities, and departments inside both their assigned organization and facility sets. They may create a facility inside an assigned organization, but creation does not mutate their principal or automatically add the new facility to their manageable facility set. Department creation requires an already assigned facility. Tenant-wide feature-flag replacement requires an unrestricted tenant administrator or platform owner. Unrestricted tenant administrators remain limited to their own active tenant and platform. Administrators cannot modify their own profile, account status, or role assignments through this service.
 
 Administrator records are not managed by the public API and browser clients cannot read or write them.
 
@@ -42,6 +42,7 @@ The server-session-backed console uses the same service with transactional princ
 | ---------------------------- | ------------------------------------------------ | ------------------------- | ---------------------------------------------------------- |
 | Create tenant                | Same platform                                    | Denied                    | Denied                                                     |
 | Add/update facility          | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
+| Add/update department        | Same platform                                    | Own active tenant         | Own active tenant and assigned organization and facility   |
 | Create/update profile        | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
 | Activate/deactivate account  | Same platform                                    | Own active tenant         | Own active tenant and assigned organization/facility rules |
 | Assign/revoke role           | Same platform; assignment requires active tenant | Own active tenant         | Own active tenant and assigned organization/facility rules |
@@ -55,15 +56,16 @@ Each route exposes one typed operation rather than a generic document writer:
 
 - POST /api/trusted-provisioning/tenants
 - PUT /api/trusted-provisioning/tenants/{tenantId}/facilities/{facilityId}
+- PUT /api/trusted-provisioning/tenants/{tenantId}/departments/{departmentId}
 - PUT /api/trusted-provisioning/users/{uid}/profile
 - PATCH /api/trusted-provisioning/users/{uid}/account-status
 - PUT /api/trusted-provisioning/users/{uid}/roles/{assignmentId}
 - DELETE /api/trusted-provisioning/users/{uid}/roles/{assignmentId}
 - PUT /api/trusted-provisioning/tenants/{tenantId}/feature-flags
 
-All path parameters, bodies, trusted records, roles, scopes, statuses, and features are validated before writes. Existing canonical identifier rules and trusted-session collection limits apply. Parent tenant, organization, facility, and profile records must already exist where required. Identity and tenant fields are immutable.
+All path parameters, bodies, trusted records, roles, scopes, statuses, and features are validated before writes. Existing canonical identifier rules and trusted-session collection limits apply. Parent tenant, organization, facility, department, and profile records must already exist where required. Department IDs lock their organization and facility identity after creation. User department membership must belong to the user's organization and facility membership, and the active department must belong to the active facility. Identity and tenant fields are immutable.
 
-The console adds a transactional membership operation which changes only organization IDs, facility IDs, and the active facility while preserving account status and explicit permission overrides. Semantic duplicate role assignments are rejected even when a caller proposes a different assignment document ID.
+The console adds a transactional membership operation which changes only organization, facility, and department membership plus the active facility and active department while preserving account status and explicit permission overrides. Assigning `department_user` requires a valid department membership in the proposed role scope. Semantic duplicate role assignments are rejected even when a caller proposes a different assignment document ID.
 
 ## Transactions and audit
 

@@ -33,6 +33,8 @@ export interface AdministrationUserSummary {
   organizationId: string | null;
   facilityIds: readonly string[];
   activeFacilityId: string | null;
+  departmentIds: readonly string[];
+  activeDepartmentId: string | null;
   accountStatus: AccountStatus;
 }
 
@@ -57,6 +59,12 @@ export interface AdministrationDirectory {
   facilities: readonly {
     id: string;
     organizationId: string;
+    displayName?: string;
+  }[];
+  departments: readonly {
+    id: string;
+    organizationId: string;
+    facilityId: string;
     displayName?: string;
   }[];
 }

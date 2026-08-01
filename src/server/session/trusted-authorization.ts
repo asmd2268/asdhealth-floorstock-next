@@ -60,6 +60,8 @@ export function fingerprintTrustedAuthorization(
     organizationId: trusted.user.organizationId,
     facilityIds: [...trusted.user.facilityIds].sort(),
     activeFacilityId: trusted.user.activeFacilityId,
+    departmentIds: [...trusted.user.departmentIds].sort(),
+    activeDepartmentId: trusted.user.activeDepartmentId,
     activeScope: scopeKey(trusted.user.activeScope),
     accountStatus: trusted.user.accountStatus,
     roles,
@@ -70,7 +72,7 @@ export function fingerprintTrustedAuthorization(
     ]),
   });
   return createHash("sha256")
-    .update("asdhealth:trusted-facility-authorization:v1\0", "utf8")
+    .update("asdhealth:trusted-facility-authorization:v2\0", "utf8")
     .update(payload, "utf8")
     .digest("hex");
 }

@@ -25,6 +25,7 @@ import {
   revokeRoleAssignmentSchema,
   setAccountStatusSchema,
   updateUserMembershipSchema,
+  upsertDepartmentSchema,
   upsertFacilitySchema,
   upsertUserProfileSchema,
 } from "./schemas";
@@ -44,6 +45,7 @@ import type {
   RevokeRoleAssignmentInput,
   SetAccountStatusInput,
   UpdateUserMembershipInput,
+  UpsertDepartmentInput,
   UpsertFacilityInput,
   UpsertUserProfileInput,
 } from "./types";
@@ -283,6 +285,10 @@ export interface TrustedProvisioningService {
     context: ProvisioningRequestContext,
     input: UpsertFacilityInput,
   ): Promise<ProvisioningResult>;
+  upsertDepartment(
+    context: ProvisioningRequestContext,
+    input: UpsertDepartmentInput,
+  ): Promise<ProvisioningResult>;
   upsertUserProfile(
     context: ProvisioningRequestContext,
     input: UpsertUserProfileInput,
@@ -368,6 +374,39 @@ export function createTrustedProvisioningService(
     const eventId = requireCanonicalTrustedIdentifier(auditIdGenerator());
     const event = createAuditEvent(eventId, context, input, now);
     transaction.create(paths.audit(event.eventId), event);
+  }
+
+  function validateDepartmentMembership(
+    directory: ReturnType<typeof parseTrustedTenantDirectory>,
+    organizationId: string | null,
+    facilityIds: readonly string[],
+    activeFacilityId: string | null,
+    departmentIds: readonly string[],
+    activeDepartmentId: string | null,
+  ): void {
+    for (const departmentId of departmentIds) {
+      const department = (directory.departments ?? []).find(
+        (candidate) => candidate.id === departmentId,
+      );
+      if (
+        !department ||
+        !facilityIds.includes(department.facilityId) ||
+        (organizationId !== null &&
+          department.organizationId !== organizationId)
+      )
+        reject("invalid_request");
+    }
+    if (activeDepartmentId !== null) {
+      const department = (directory.departments ?? []).find(
+        (candidate) => candidate.id === activeDepartmentId,
+      );
+      if (
+        !department ||
+        !departmentIds.includes(activeDepartmentId) ||
+        department.facilityId !== activeFacilityId
+      )
+        reject("invalid_request");
+    }
   }
 
   return {
@@ -476,6 +515,67 @@ export function createTrustedProvisioningService(
         },
       ),
 
+    upsertDepartment: (context, input) =>
+      execute(
+        context,
+        input,
+        upsertDepartmentSchema,
+        async (transaction, ctx, value) => {
+          authorizeTenant(ctx.actor, "upsert_department", value.tenantId);
+          const directory = await requireTenant(
+            transaction,
+            value.tenantId,
+            ctx.actor,
+          );
+          requireActorPlatform(ctx.actor, directory.platformId);
+          const facility = directory.facilities.find(
+            (candidate) => candidate.id === value.department.facilityId,
+          );
+          if (
+            !facility ||
+            facility.organizationId !== value.department.organizationId
+          )
+            reject("invalid_request");
+          if (
+            ctx.actor.kind === "tenant_admin" &&
+            ctx.actor.scope === "restricted" &&
+            (!ctx.actor.organizationIds.includes(
+              value.department.organizationId,
+            ) ||
+              !ctx.actor.facilityIds.includes(value.department.facilityId))
+          )
+            reject("forbidden");
+          const departments = [...(directory.departments ?? [])];
+          const index = departments.findIndex(
+            (department) => department.id === value.department.id,
+          );
+          if (
+            index >= 0 &&
+            (departments[index].organizationId !==
+              value.department.organizationId ||
+              departments[index].facilityId !== value.department.facilityId)
+          )
+            reject("conflict");
+          if (index >= 0) departments[index] = value.department;
+          else departments.push(value.department);
+          const updated = parseTrustedTenantDirectory({
+            ...directory,
+            departments,
+          });
+          transaction.set(paths.tenant(value.tenantId), updated);
+          appendAudit(transaction, ctx, {
+            action: "upsert_department",
+            targetType: "department",
+            targetId: value.department.id,
+            tenantId: value.tenantId,
+            metadata: {
+              organizationId: value.department.organizationId,
+              facilityId: value.department.facilityId,
+            },
+          });
+        },
+      ),
+
     upsertUserProfile: (context, input) =>
       execute(
         context,
@@ -538,6 +638,14 @@ export function createTrustedProvisioningService(
           ) {
             reject("invalid_request");
           }
+          validateDepartmentMembership(
+            directory,
+            value.organizationId,
+            value.facilityIds,
+            value.activeFacilityId,
+            value.departmentIds ?? [],
+            value.activeDepartmentId ?? null,
+          );
           if (
             ctx.actor.kind === "tenant_admin" &&
             ctx.actor.scope === "restricted"
@@ -673,7 +781,20 @@ export function createTrustedProvisioningService(
             organizationId: value.organizationId,
             facilityIds: value.facilityIds,
             activeFacilityId: value.activeFacilityId,
+            departmentIds: value.departmentIds ?? profile.departmentIds ?? [],
+            activeDepartmentId:
+              value.activeDepartmentId === undefined
+                ? (profile.activeDepartmentId ?? null)
+                : value.activeDepartmentId,
           });
+          validateDepartmentMembership(
+            directory,
+            value.organizationId,
+            value.facilityIds,
+            value.activeFacilityId,
+            updatedProfile.departmentIds ?? [],
+            updatedProfile.activeDepartmentId ?? null,
+          );
           for (const override of updatedProfile.explicitPermissionOverrides ??
             []) {
             validateScopeInTenant(override.scope, directory);
@@ -708,6 +829,7 @@ export function createTrustedProvisioningService(
             metadata: {
               organizationId: value.organizationId,
               activeFacilityId: value.activeFacilityId,
+              activeDepartmentId: updatedProfile.activeDepartmentId ?? null,
             },
           });
         },
@@ -742,6 +864,32 @@ export function createTrustedProvisioningService(
           );
           authorizeProfileMembership(ctx.actor, profile);
           validateScopeForProfile(value.scope, profile);
+          validateDepartmentMembership(
+            directory,
+            profile.organizationId ?? null,
+            profile.facilityIds ?? [],
+            profile.activeFacilityId ?? null,
+            profile.departmentIds ?? [],
+            profile.activeDepartmentId ?? null,
+          );
+          if (value.roleId === "department_user") {
+            const hasDepartmentInScope = (profile.departmentIds ?? []).some(
+              (departmentId) => {
+                const department = (directory.departments ?? []).find(
+                  (candidate) => candidate.id === departmentId,
+                );
+                if (!department) return false;
+                if (value.scope.kind === "platform") return true;
+                if (department.organizationId !== value.scope.organizationId)
+                  return false;
+                return (
+                  value.scope.kind === "organization" ||
+                  department.facilityId === value.scope.facilityId
+                );
+              },
+            );
+            if (!hasDepartmentInScope) reject("invalid_request");
+          }
 
           const assignmentPath = paths.assignment(
             value.uid,

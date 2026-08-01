@@ -14,11 +14,12 @@ No application authorization is accepted from custom claims, email or domain, qu
 
 | Capability                                       | Platform owner                          | Unrestricted tenant admin                   | Restricted tenant admin                                                                              |
 | ------------------------------------------------ | --------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| View tenant users/facilities/audit               | Current session tenant on same platform | Own active tenant                           | Own active tenant, filtered to assigned organizations/facilities                                     |
+| View tenant users/facilities/departments/audit   | Current session tenant on same platform | Own active tenant                           | Own active tenant, filtered to assigned organizations/facilities                                     |
 | Activate/deactivate users                        | Same-platform current tenant; not self  | Own active tenant; not self/admin principal | In-scope users only; not self/admin principal                                                        |
 | Edit membership                                  | Same-platform current tenant; not self  | Own active tenant; not self/admin principal | Existing and requested membership must remain entirely in assigned scope                             |
 | Assign/revoke canonical roles                    | Same-platform current tenant; not self  | Own active tenant; not self/admin principal | Target profile and role scope must remain entirely in assigned scope                                 |
 | Create/update facility                           | Existing platform-owner policy          | Own active tenant                           | Assigned organization; existing facility must also be assigned; creation never expands the principal |
+| Create/update department                         | Existing platform-owner policy          | Own active tenant                           | Assigned organization and facility; creation never expands the principal                             |
 | View/replace complete feature flags              | Allowed                                 | Allowed in own active tenant                | Denied                                                                                               |
 | Create tenant or manage administrator principals | Not exposed                             | Not exposed                                 | Not exposed                                                                                          |
 
@@ -30,7 +31,7 @@ The namespace contains `/app/admin`, `/app/admin/users`, `/app/admin/users/{uid}
 
 User and audit reads use a page size of 25 and scan primary trusted records in batches of at most 51, with an absolute 103-record scan cap per page request. Restricted filtering therefore cannot trigger an unbounded query. User scans can add one administrator-principal lookup per primary record plus the single tenant directory. Only the last record actually returned to the caller may become a continuation cursor; filtered user or audit identifiers are never serialized. A fully filtered batch is followed within the same bounded scan instead of prematurely ending the listing. Role reads fail closed at the 51-record overflow sentinel, below the trusted assignment maximum. Every raw Admin-SDK document is validated before a minimal view model is rendered. Provider errors, tokens, sessions, credentials, principal records, request markers, and raw trusted records are never serialized.
 
-Restricted audit views expose only facility events whose immutable facility target is assigned to the principal. Tenant-wide events and all user, account, profile, and role events are conservatively hidden because the current audit schema does not preserve an immutable historical target-scope snapshot; filtering those events by current membership would risk historical cross-scope disclosure. Unrestricted administrators and platform owners can view the tenant-bound event set. Audit metadata is validated and passed through the secret-removing sanitizer again before rendering. Audit is read-only and exposes no arbitrary query controls.
+Restricted audit views expose only facility events whose immutable facility target is assigned to the principal. Tenant-wide events and all department, user, account, profile, and role events are conservatively hidden because the current audit schema does not preserve an immutable historical target-scope snapshot; filtering those events by current membership would risk historical cross-scope disclosure. Unrestricted administrators and platform owners can view the tenant-bound event set. Audit metadata is validated and passed through the secret-removing sanitizer again before rendering. Audit is read-only and exposes no arbitrary query controls.
 
 ## Mutation boundary
 
@@ -41,11 +42,12 @@ Console endpoints are operation-specific:
 - `POST /api/admin/users/{uid}/roles`
 - `DELETE /api/admin/users/{uid}/roles/{assignmentId}`
 - `PUT /api/admin/facilities/{facilityId}`
+- `PUT /api/admin/departments/{departmentId}`
 - `PUT /api/admin/features`
 
 They require the exact `SERVER_SESSION_ALLOWED_ORIGIN` matching the request URL origin, `Sec-Fetch-Site: same-origin`, the `x-asdhealth-admin-action: 1` anti-CSRF header, exact `application/json`, a canonical request ID, and an exact bounded content length. The separate trusted-provisioning origin remains exclusive to the external bearer-token provisioning API. Bodies are streamed to a 16 KiB limit, decoded as strict UTF-8, parsed with duplicate object keys rejected, and validated with strict schemas. Errors are normalized, contain no record-existence detail, and carry `Cache-Control: no-store`.
 
-Role identifiers and scopes come from server-owned enumerations. Role assignment IDs are generated on the server. Duplicate semantic assignments are rejected. Membership edits preserve account status and explicit permission overrides transactionally, and reject a move that would leave a preserved override or role assignment outside the new membership. Feature replacement carries the complete previously rendered flag set as a transactional optimistic-concurrency precondition, preventing a stale console page from overwriting a newer update. Deactivation is confirmed in the UI and takes effect on the next protected request because server sessions re-resolve the current profile; this phase does not enumerate and revoke all of that user's stored session documents.
+Role identifiers and scopes come from server-owned enumerations. Role assignment IDs are generated on the server. Duplicate semantic assignments are rejected. Membership edits preserve account status and explicit permission overrides transactionally, validate department parents, require the active department to belong to the active facility, and reject a move that would leave a preserved override or role assignment outside the new membership. A `department_user` role cannot be assigned until an in-scope department membership exists. Feature replacement carries the complete previously rendered flag set as a transactional optimistic-concurrency precondition, preventing a stale console page from overwriting a newer update. Deactivation is confirmed in the UI and takes effect on the next protected request because server sessions re-resolve the current profile; this phase does not enumerate and revoke all of that user's stored session documents.
 
 ## Firestore queries and indexes
 
@@ -62,7 +64,7 @@ Server components pass only the labels and safe records each control needs. No p
 - administrator-principal and break-glass management;
 - tenant creation in the console;
 - explicit-permission-override editing;
-- facility deletion and organization management;
+- department/facility deletion and organization management;
 - user identity-provider metadata and user creation;
 - session enumeration/global revocation, rate limiting, multi-party approval, audit export/retention/SIEM integration;
 - production indexes, rules, credentials, configuration, and deployment;

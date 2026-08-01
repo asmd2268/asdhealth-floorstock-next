@@ -1,0 +1,104 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import {
+  sendAdministrationMutation,
+  type MutationState,
+} from "./mutation-client";
+
+export function DepartmentForm({
+  facilities,
+  labels,
+}: {
+  facilities: readonly {
+    id: string;
+    organizationId: string;
+    displayName?: string;
+  }[];
+  labels: {
+    departmentId: string;
+    facility: string;
+    displayName: string;
+    submit: string;
+    saving: string;
+    success: string;
+    error: string;
+  };
+}) {
+  const router = useRouter();
+  const inFlight = useRef(false);
+  const [state, setState] = useState<MutationState>("idle");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inFlight.current) return;
+    const form = new FormData(event.currentTarget);
+    const departmentId = String(form.get("departmentId") ?? "");
+    const facilityId = String(form.get("facilityId") ?? "");
+    const facility = facilities.find((item) => item.id === facilityId);
+    if (!facility) {
+      setState("error");
+      return;
+    }
+    const displayName = String(form.get("displayName") ?? "");
+    inFlight.current = true;
+    setState("pending");
+    try {
+      const ok = await sendAdministrationMutation(
+        `/api/admin/departments/${encodeURIComponent(departmentId)}`,
+        "PUT",
+        {
+          organizationId: facility.organizationId,
+          facilityId,
+          ...(displayName ? { displayName } : {}),
+        },
+      );
+      setState(ok ? "success" : "error");
+      if (ok) router.refresh();
+    } catch {
+      setState("error");
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return (
+    <form className="admin-form" onSubmit={submit}>
+      <label>
+        <span>{labels.departmentId}</span>
+        <input
+          required
+          name="departmentId"
+          maxLength={128}
+          autoComplete="off"
+        />
+      </label>
+      <label>
+        <span>{labels.facility}</span>
+        <select required name="facilityId">
+          {facilities.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.displayName ?? item.id}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>{labels.displayName}</span>
+        <input name="displayName" maxLength={120} autoComplete="off" />
+      </label>
+      <button disabled={state === "pending"} type="submit">
+        {state === "pending" ? labels.saving : labels.submit}
+      </button>
+      <p aria-live="polite">
+        {state === "success"
+          ? labels.success
+          : state === "error"
+            ? labels.error
+            : ""}
+      </p>
+    </form>
+  );
+}

@@ -18,6 +18,8 @@ tenantId: string
 organizationId: string | null
 facilityIds: string[]               // 1–100, unique
 activeFacilityId: string | null
+departmentIds: string[]             // 0–250, unique
+activeDepartmentId: string | null   // included above and in active facility
 accountStatus: active | disabled | pending | suspended
 explicitPermissionOverrides: Array<{ // at most 100
   effect: allow | deny
@@ -50,6 +52,12 @@ facilities: Array<{                  // 1–2,000
   organizationId: string            // must reference an organization above
   displayName?: string               // 1–120 chars, trimmed, no Unicode category C
 }>
+departments: Array<{                 // 0–10,000
+  id: string
+  organizationId: string
+  facilityId: string                // references a matching facility above
+  displayName?: string              // 1–120 chars, trimmed, no Unicode category C
+}>
 featureFlags: {
   announcements: boolean
   zebra_labels: boolean
@@ -58,7 +66,7 @@ featureFlags: {
 }
 ```
 
-Organization and facility identifiers must be unique. Every feature flag is required; omitted, extra, or malformed flags reject the record. Inactive tenants deny session resolution.
+Organization, facility, and department identifiers must be unique. Every department must reference a facility whose organization matches. A profile department must be in that user's trusted organization and facility membership; its active department must be in the active facility. A session with an applicable `department_user` role and no active department is denied. Every feature flag is required; omitted, extra, or malformed flags reject the record. Inactive tenants deny session resolution.
 
 At most 50 role assignments are accepted. The Firestore query is bounded to 51 records so the repository can detect overflow and fail closed. Including the profile and tenant directory singleton reads, one resolved session accepts at most 52 trusted records.
 

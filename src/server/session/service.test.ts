@@ -35,6 +35,8 @@ const successfulSession: Extract<SessionResolutionResult, { ok: true }> = {
     organizationId: "organization-1",
     facilityIds: ["facility-1"],
     activeFacilityId: "facility-1",
+    departmentIds: [],
+    activeDepartmentId: null,
     activeScope: facilityScope,
     roleAssignments: [{ role: "pharmacy_manager", scope: facilityScope }],
     explicitPermissionOverrides: [],

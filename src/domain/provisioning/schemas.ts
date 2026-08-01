@@ -82,6 +82,14 @@ const facilitySchema = z
     displayName: safeDisplayNameSchema.optional(),
   })
   .strict();
+const departmentSchema = z
+  .object({
+    id: provisioningIdentifierSchema,
+    organizationId: provisioningIdentifierSchema,
+    facilityId: provisioningIdentifierSchema,
+    displayName: safeDisplayNameSchema.optional(),
+  })
+  .strict();
 
 export const administratorPrincipalSchema = z.union([
   z
@@ -158,6 +166,10 @@ export const createTenantSchema = z
       .array(facilitySchema)
       .min(1)
       .max(trustedSessionLimits.tenantFacilities),
+    departments: z
+      .array(departmentSchema)
+      .max(trustedSessionLimits.tenantDepartments)
+      .optional(),
     featureFlags: featureFlagsSchema,
   })
   .strict()
@@ -191,12 +203,41 @@ export const createTenantSchema = z
         });
       }
     });
+    const departmentIds = new Set(
+      (tenant.departments ?? []).map((department) => department.id),
+    );
+    if (departmentIds.size !== (tenant.departments ?? []).length) {
+      context.addIssue({
+        code: "custom",
+        path: ["departments"],
+        message: "Department identifiers must be unique.",
+      });
+    }
+    (tenant.departments ?? []).forEach((department, index) => {
+      const facility = tenant.facilities.find(
+        (candidate) => candidate.id === department.facilityId,
+      );
+      if (!facility || facility.organizationId !== department.organizationId) {
+        context.addIssue({
+          code: "custom",
+          path: ["departments", index],
+          message: "Department facility and organization must match.",
+        });
+      }
+    });
   });
 
 export const upsertFacilitySchema = z
   .object({
     tenantId: provisioningIdentifierSchema,
     facility: facilitySchema,
+  })
+  .strict();
+
+export const upsertDepartmentSchema = z
+  .object({
+    tenantId: provisioningIdentifierSchema,
+    department: departmentSchema,
   })
   .strict();
 
@@ -210,6 +251,11 @@ export const upsertUserProfileSchema = z
       .min(1)
       .max(trustedSessionLimits.facilityMemberships),
     activeFacilityId: provisioningIdentifierSchema.nullable(),
+    departmentIds: z
+      .array(provisioningIdentifierSchema)
+      .max(trustedSessionLimits.departmentMemberships)
+      .optional(),
+    activeDepartmentId: provisioningIdentifierSchema.nullable().optional(),
     accountStatus: z.enum(accountStatuses),
     explicitPermissionOverrides: z
       .array(permissionOverrideSchema)
@@ -234,6 +280,26 @@ export const upsertUserProfileSchema = z
         message: "Active facility must be an allowed facility.",
       });
     }
+    if (
+      profile.departmentIds &&
+      new Set(profile.departmentIds).size !== profile.departmentIds.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["departmentIds"],
+        message: "Department identifiers must be unique.",
+      });
+    }
+    if (
+      profile.activeDepartmentId &&
+      !profile.departmentIds?.includes(profile.activeDepartmentId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["activeDepartmentId"],
+        message: "Active department must be an allowed department.",
+      });
+    }
   });
 
 export const setAccountStatusSchema = z
@@ -254,6 +320,11 @@ export const updateUserMembershipSchema = z
       .min(1)
       .max(trustedSessionLimits.facilityMemberships),
     activeFacilityId: provisioningIdentifierSchema,
+    departmentIds: z
+      .array(provisioningIdentifierSchema)
+      .max(trustedSessionLimits.departmentMemberships)
+      .optional(),
+    activeDepartmentId: provisioningIdentifierSchema.nullable().optional(),
   })
   .strict()
   .superRefine((membership, context) => {
@@ -271,6 +342,26 @@ export const updateUserMembershipSchema = z
         code: "custom",
         path: ["activeFacilityId"],
         message: "Active facility must be an allowed facility.",
+      });
+    }
+    if (
+      membership.departmentIds &&
+      new Set(membership.departmentIds).size !== membership.departmentIds.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["departmentIds"],
+        message: "Department identifiers must be unique.",
+      });
+    }
+    if (
+      membership.activeDepartmentId &&
+      !membership.departmentIds?.includes(membership.activeDepartmentId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["activeDepartmentId"],
+        message: "Active department must be an allowed department.",
       });
     }
   });
