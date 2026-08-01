@@ -72,6 +72,15 @@ service cloud.firestore {
     match /inventoryRequestKeys/{namespaceId} { allow read, write: if false; }
     match /inventoryAuditEvents/{eventId} { allow read, write: if false; }
 
+    // Floor-stock requests are also fully server-mediated. Request headers,
+    // nested lines, audit records, and idempotency keys are denied to browsers.
+    match /floorStockRequests/{requestId} {
+      allow read, write: if false;
+      match /lines/{lineId} { allow read, write: if false; }
+    }
+    match /floorStockRequestKeys/{namespaceId} { allow read, write: if false; }
+    match /floorStockRequestAuditEvents/{eventId} { allow read, write: if false; }
+
     match /{document=**} {
       allow read, write: if false;
     }

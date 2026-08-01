@@ -172,4 +172,21 @@ describe("Firebase Admin client boundary", () => {
       expect(source).not.toMatch(/localStorage|sessionStorage|customClaims/);
     }
   });
+
+  it("keeps the request client free of trusted authority inputs", () => {
+    const clientFiles = sourceFiles(
+      join(process.cwd(), "src/components/requests"),
+    ).filter((file) =>
+      /^['\"]use client['\"];/m.test(readFileSync(file, "utf8")),
+    );
+    for (const file of clientFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(
+        /actorUid|tenantId|organizationId|facilityId|activeDepartmentId|roleAssignments|featureFlags|explicitPermissionOverrides|trustedStateFingerprint|firebase-admin|@\/server\//,
+      );
+      expect(source).not.toMatch(
+        /floorStockRequestKeys|floorStockRequestAuditEvents|localStorage|sessionStorage|customClaims/,
+      );
+    }
+  });
 });

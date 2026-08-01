@@ -185,6 +185,100 @@ a {
   padding: 48px;
 }
 
+.request-create h2,
+.request-create > p {
+  margin-block-start: 0;
+}
+.request-create form {
+  display: grid;
+  gap: 16px;
+}
+.request-note {
+  display: grid;
+  gap: 6px;
+}
+.request-note input,
+.request-configurations input[type="number"] {
+  min-height: 42px;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+}
+.request-configurations {
+  display: grid;
+  gap: 10px;
+}
+.request-configurations > div {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, 240px);
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fbfb;
+}
+.request-configurations label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.request-create button,
+.request-actions button {
+  min-height: 38px;
+  padding-inline: 14px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+.request-create button {
+  justify-self: start;
+}
+.request-create button:disabled,
+.request-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.request-status {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #edf3f4;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.request-status-approved,
+.request-status-ready,
+.request-status-delivered {
+  background: #dff5e8;
+  color: #17653b;
+}
+.request-status-rejected,
+.request-status-cancelled {
+  background: #fde8e7;
+  color: #9a2c28;
+}
+.request-status-submitted,
+.request-status-fulfilling {
+  background: #fff2d8;
+  color: #7b5300;
+}
+
+@media (max-width: 700px) {
+  .request-configurations > div {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-header {
   display: flex;
   align-items: center;

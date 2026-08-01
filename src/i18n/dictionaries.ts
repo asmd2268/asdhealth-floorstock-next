@@ -85,6 +85,48 @@ export interface Dictionary {
     controlledMedicinesDescription: string;
     inventoryDescription: string;
   };
+  requests: {
+    title: string;
+    subtitle: string;
+    backToApp: string;
+    createTitle: string;
+    createDescription: string;
+    note: string;
+    quantity: string;
+    create: string;
+    creating: string;
+    success: string;
+    error: string;
+    empty: string;
+    unavailable: string;
+    accessDenied: string;
+    requestId: string;
+    department: string;
+    requester: string;
+    lines: string;
+    status: string;
+    updated: string;
+    actions: string;
+    submit: string;
+    approve: string;
+    reject: string;
+    startFulfillment: string;
+    completeFulfillment: string;
+    deliver: string;
+    cancel: string;
+    working: string;
+    statuses: Record<
+      | "draft"
+      | "submitted"
+      | "approved"
+      | "rejected"
+      | "fulfilling"
+      | "ready"
+      | "delivered"
+      | "cancelled",
+      string
+    >;
+  };
   inventory: {
     title: string;
     subtitle: string;
@@ -323,6 +365,49 @@ const en: Dictionary = {
     controlledMedicinesDescription:
       "Controlled medicines permission foundation.",
     inventoryDescription: "View and post facility-scoped inventory movements.",
+  },
+  requests: {
+    title: "Floor-stock requests",
+    subtitle:
+      "Department requests with trusted review and fulfillment controls",
+    backToApp: "Back to dashboard",
+    createTitle: "Create a department request",
+    createDescription:
+      "Select one or more configured medicines and enter whole-unit quantities.",
+    note: "Request note",
+    quantity: "Quantity",
+    create: "Create draft",
+    creating: "Creating…",
+    success: "The request was updated securely.",
+    error: "The request could not be updated.",
+    empty: "No requests are available in this scope.",
+    unavailable: "Request data is temporarily unavailable.",
+    accessDenied: "Request access is not available for this session.",
+    requestId: "Request",
+    department: "Department",
+    requester: "Requested by",
+    lines: "Lines",
+    status: "Status",
+    updated: "Updated",
+    actions: "Actions",
+    submit: "Submit",
+    approve: "Approve",
+    reject: "Reject",
+    startFulfillment: "Start fulfillment",
+    completeFulfillment: "Mark ready",
+    deliver: "Confirm delivery",
+    cancel: "Cancel",
+    working: "Working…",
+    statuses: {
+      draft: "Draft",
+      submitted: "Submitted",
+      approved: "Approved",
+      rejected: "Rejected",
+      fulfilling: "Fulfilling",
+      ready: "Ready for delivery",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+    },
   },
   inventory: {
     title: "Inventory",
@@ -589,6 +674,48 @@ const ar: Dictionary = {
     newRequestDescription: "إنشاء طلب جديد لمخزون القسم.",
     controlledMedicinesDescription: "أساس صلاحيات الأدوية المخدرة والمقيدة.",
     inventoryDescription: "عرض حركات مخزون المنشأة وتسجيلها.",
+  },
+  requests: {
+    title: "طلبات مخزون الأقسام",
+    subtitle: "طلبات الأقسام مع مراجعة وصرف محكومين بصلاحيات موثوقة",
+    backToApp: "العودة إلى لوحة المعلومات",
+    createTitle: "إنشاء طلب للقسم",
+    createDescription:
+      "حدد صنفًا واحدًا أو أكثر من الأصناف المهيأة وأدخل الكميات بوحدات صحيحة.",
+    note: "ملاحظة الطلب",
+    quantity: "الكمية",
+    create: "إنشاء مسودة",
+    creating: "جارٍ الإنشاء…",
+    success: "تم تحديث الطلب بأمان.",
+    error: "تعذر تحديث الطلب.",
+    empty: "لا توجد طلبات متاحة ضمن هذا النطاق.",
+    unavailable: "بيانات الطلبات غير متاحة مؤقتًا.",
+    accessDenied: "الوصول إلى الطلبات غير متاح لهذه الجلسة.",
+    requestId: "الطلب",
+    department: "القسم",
+    requester: "مقدم الطلب",
+    lines: "البنود",
+    status: "الحالة",
+    updated: "آخر تحديث",
+    actions: "الإجراءات",
+    submit: "إرسال",
+    approve: "اعتماد",
+    reject: "رفض",
+    startFulfillment: "بدء التجهيز",
+    completeFulfillment: "جاهز للتسليم",
+    deliver: "تأكيد التسليم",
+    cancel: "إلغاء",
+    working: "جارٍ التنفيذ…",
+    statuses: {
+      draft: "مسودة",
+      submitted: "مُرسل",
+      approved: "معتمد",
+      rejected: "مرفوض",
+      fulfilling: "قيد التجهيز",
+      ready: "جاهز للتسليم",
+      delivered: "تم التسليم",
+      cancelled: "ملغي",
+    },
   },
   inventory: {
     title: "المخزون",

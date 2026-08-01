@@ -40,7 +40,7 @@ export const navigationItems: readonly NavigationItem[] = [
   navigationItem("dashboard", "dashboard"),
   navigationItem("announcements", "announcements"),
   navigationItem("zebra_labels", "zebra_labels"),
-  navigationItem("new_request", "new_request"),
+  navigationItem("new_request", "new_request", "read", "/app/requests"),
   navigationItem("controlled_medicines", "controlled_medicines"),
   navigationItem("inventory", "inventory_balance", "read", "/app/inventory"),
 ];

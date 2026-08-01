@@ -131,13 +131,15 @@ describe("application shell boundaries", () => {
   it("uses authenticated role assignments even when substitution props are supplied", () => {
     const untrustedProps = {
       ...defaultProps,
-      demoRole: "department_user",
-      roleAssignments: [{ role: "department_user", scope: demoFacilityScope }],
+      demoRole: "external_pharmacy_supervisor",
+      roleAssignments: [
+        { role: "external_pharmacy_supervisor", scope: demoFacilityScope },
+      ],
     };
     render(<AppShell {...untrustedProps} />);
 
     expect(screen.getByRole("navigation")).toHaveTextContent("Announcements");
-    expect(screen.getByRole("navigation")).not.toHaveTextContent("New request");
+    expect(screen.getByRole("navigation")).toHaveTextContent("New request");
   });
 
   it("lets only DemoAppShell substitute a permission-correct role", async () => {

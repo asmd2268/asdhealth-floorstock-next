@@ -39,6 +39,7 @@ invariant queries and remains undeployed.
 
 ## Deferred
 
-Floor-stock requests, cabinet/shelf workflows, crash carts, public QR expiry
-pages, controlled medicines, printing, bulk import, deletion, replenishment,
+Inventory-linked fulfillment of floor-stock requests, cabinet/shelf workflows,
+crash carts, public QR expiry pages, controlled medicines, printing, bulk import,
+deletion, replenishment,
 reservation, costing, reporting, and deployment remain out of scope.

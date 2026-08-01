@@ -48,20 +48,25 @@ describe("navigation visibility", () => {
   it("uses one canonical target for every href and rendered section", () => {
     for (const item of navigationItems) {
       expect(item.href).toBe(
-        item.id === "inventory" ? "/app/inventory" : `#${item.targetId}`,
+        item.id === "inventory"
+          ? "/app/inventory"
+          : item.id === "new_request"
+            ? "/app/requests"
+            : `#${item.targetId}`,
       );
       expect(item.targetId).toBe(item.id.replaceAll("_", "-"));
     }
   });
 
-  it("shows pharmacy modules without new request to pharmacy roles", () => {
+  it("shows request review navigation to pharmacy roles", () => {
     expect(idsFor("pharmacy_manager")).toEqual([
       "dashboard",
       "announcements",
       "zebra_labels",
+      "new_request",
       "inventory",
     ]);
-    expect(idsFor("master")).not.toContain("new_request");
+    expect(idsFor("master")).toContain("new_request");
   });
 
   it("shows dashboard and new request to department users", () => {
