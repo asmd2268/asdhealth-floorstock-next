@@ -292,3 +292,9 @@ export interface InventoryTransactionSummary {
   lineCount: number;
   postedAt: string;
 }
+
+export interface InventoryDirectoryFilters {
+  itemId?: string;
+  locationId?: string;
+  transactionType?: InventoryTransactionType;
+}

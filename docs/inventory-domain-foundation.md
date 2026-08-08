@@ -35,11 +35,18 @@ Catalog, location, lot, and floor-stock records now have separate protected
 server provisioning operations documented in
 `inventory-provisioning-foundation.md`; no generic document-write API exists.
 `firestore.indexes.json` declares the bounded directory and provisioning
-invariant queries and remains undeployed.
+invariant queries, plus the bounded transaction-type filter, and remains
+undeployed.
+
+The protected inventory page now supports bounded item, location, and transaction
+type filters. It also runs reconciliation over a capped facility window, checking
+deterministic balance identities, last-transaction references, transaction line
+counts, parent identities, and contiguous line numbering. An overflow or data
+parse failure is surfaced as unavailable rather than treated as a clean report.
 
 ## Deferred
 
 Inventory-linked fulfillment of floor-stock requests, cabinet/shelf workflows,
 crash carts, public QR expiry pages, controlled medicines, printing, bulk import,
-deletion, replenishment,
-reservation, costing, reporting, and deployment remain out of scope.
+deletion, replenishment, reservation, costing, advanced reporting, and deployment
+remain out of scope.
