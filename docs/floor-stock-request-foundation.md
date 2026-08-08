@@ -18,8 +18,10 @@ reject submitted requests. Pharmacy fulfillment roles may start fulfillment,
 mark all approved lines ready, and confirm delivery. Invalid transitions fail
 with a conflict and cannot skip lifecycle states.
 
-Approval currently accepts the requested quantities in full. Completion records
-the approved quantity as fulfilled for every line. Partial approval, partial
+Approval currently accepts the requested quantities in full. Completion requires
+an exact allocation of every approved line from one trusted pharmacy or
+central-store source. A line may split across eligible lots, but its entered-unit
+sum must exactly equal the approved quantity. Partial approval, partial
 fulfillment, substitutions, back orders, and department-side receipt
 acknowledgement are deferred.
 
@@ -44,6 +46,13 @@ tenant, organization, facility, and department. Requested quantities are exact
 positive integers and cannot exceed the trusted configured maximum. Duplicate
 configuration lines are rejected.
 
+Completion additionally requires the trusted `inventory` feature. Client balance
+IDs are recomputed from the full identity and must match the selected source,
+facility, item, base unit, lot, and expiry. The server revalidates source and
+destination locations and ancestry, active items, exact unit conversions, active
+lots, expiry, safe-integer arithmetic, and sufficient stock inside the posting
+transaction.
+
 ## Storage and atomicity
 
 - `floorStockRequests/{requestId}` stores the versioned request header and
@@ -55,11 +64,18 @@ configuration lines are rejected.
   scoped by actor, tenant, operation, and correlation ID.
 - `floorStockRequestAuditEvents/{eventId}` stores append-only sanitized lifecycle
   audit events.
+- `inventoryTransactions/{transactionId}` and nested lines store the immutable
+  request-fulfillment ledger and request-line links.
+- `inventoryBalances/{balanceId}` stores each atomic source decrement and
+  department-destination increment.
+- `inventoryAuditEvents/{eventId}` stores the linked sanitized inventory audit.
 
-Every operation reads before writing, then commits the header, affected lines,
-audit event, and idempotency marker in one Firestore transaction. Audit failure
-rolls the complete operation back. Replays revalidate current authority before
-returning the existing request, and altered-payload reuse conflicts.
+Every operation reads before writing. Fulfillment completion commits the request
+header and line links, inventory header and lines, all balance mutations, both
+audit events, and the payload-bound idempotency marker in one Firestore
+transaction. Any failure rolls the complete operation back. Replays revalidate
+current authority before returning the existing request, and altered-payload
+reuse conflicts.
 
 All four collection paths, including nested request lines, are explicitly denied
 to browser reads and writes. Server directory reads are schema-validated,
@@ -79,17 +95,14 @@ request exists.
 The protected Arabic/English page at `/app/requests` shows only server-filtered
 requests. Mutation controls are filtered by the current server-derived
 capabilities and request status, while every API independently reauthorizes the
-operation.
+operation. Authorized fulfillment staff use `/app/requests/{requestId}` to
+allocate exact quantities across eligible positive, non-expired source balances.
+The supporting directory reads are scope-validated and bounded with overflow
+sentinels.
 
 ## Explicitly deferred
 
-Request fulfillment does not yet create inventory issue/transfer ledger entries
-or decrement balances. Lot/expiry selection and atomic linkage to an inventory
-transaction are required before that integration can be safe. Operational users
-must not treat a `delivered` request as an inventory ledger posting in this
-phase.
-
-Also deferred: partial quantities, substitutions, shortage reasons, back orders,
+Deferred: partial quantities, substitutions, shortage reasons, back orders,
 request editing, line-level history, receiver signatures, notifications,
 printing, service-level timers, reporting, reconciliation, retention, rate
 limiting, monitoring, and every production deployment.

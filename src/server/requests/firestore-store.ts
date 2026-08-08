@@ -53,6 +53,9 @@ function adapter(
       raw(transaction, firestore, inventoryPaths.item(itemId)),
     getLocation: (locationId) =>
       raw(transaction, firestore, inventoryPaths.location(locationId)),
+    getLot: (lotId) => raw(transaction, firestore, inventoryPaths.lot(lotId)),
+    getBalance: (balanceId) =>
+      raw(transaction, firestore, inventoryPaths.balance(balanceId)),
     getIdempotency: (namespaceId) =>
       raw(
         transaction,
@@ -116,6 +119,28 @@ function adapter(
         firestore.doc(
           path(floorStockRequestPaths.idempotency(record.namespaceId)),
         ),
+        record,
+      ),
+    createInventoryTransaction: (record) =>
+      transaction.create(
+        firestore.doc(path(inventoryPaths.transaction(record.transactionId))),
+        record,
+      ),
+    createInventoryLine: (record) =>
+      transaction.create(
+        firestore.doc(
+          path(inventoryPaths.line(record.transactionId, record.lineId)),
+        ),
+        record,
+      ),
+    setInventoryBalance: (record) =>
+      transaction.set(
+        firestore.doc(path(inventoryPaths.balance(record.balanceId))),
+        record,
+      ),
+    createInventoryAudit: (record) =>
+      transaction.create(
+        firestore.doc(path(inventoryPaths.audit(record.eventId))),
         record,
       ),
   };

@@ -36,6 +36,7 @@ export const inventoryTransactionTypes = [
   "adjustment_increase",
   "adjustment_decrease",
   "transfer",
+  "request_fulfillment",
 ] as const;
 export type InventoryTransactionType =
   (typeof inventoryTransactionTypes)[number];
@@ -168,13 +169,17 @@ export interface InventoryTransactionLineRecord {
   enteredQuantity: number;
   baseUnit: InventoryUnit;
   baseQuantity: number;
+  sourceLocationId: string | null;
+  destinationLocationId: string | null;
+  floorStockRequestId: string | null;
+  floorStockRequestLineId: string | null;
 }
 
 export interface InventoryAuditEventRecord {
   schemaVersion: 1;
   eventId: string;
   actorUid: string;
-  action: InventoryOperation;
+  action: InventoryOperation | "request_fulfillment";
   targetType: "inventory_transaction";
   targetId: string;
   requestId: string;

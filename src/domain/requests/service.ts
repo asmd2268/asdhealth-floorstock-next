@@ -3,15 +3,32 @@ import { createHash, randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 
 import {
+  INVENTORY_MAX_BALANCE_QUANTITY,
+  INVENTORY_MAX_LOCATION_DEPTH,
   floorStockConfigurationSchema,
+  inventoryBalanceSchema,
   inventoryLocationSchema,
+  inventoryLotSchema,
+  isExpiredDateOnly,
   medicationItemSchema,
 } from "@/domain/inventory/schemas";
+import {
+  inventoryBalanceId,
+  inventoryConversionMultiplier,
+} from "@/domain/inventory/balances";
+import type {
+  InventoryBalanceIdentity,
+  InventoryBalanceRecord,
+  InventoryLocationRecord,
+  InventoryTransactionLineRecord,
+  InventoryTransactionRecord,
+} from "@/domain/inventory/types";
 import { sanitizeAuditMetadata } from "@/domain/provisioning/audit";
 import { provisioningIdentifierSchema } from "@/domain/provisioning/schemas";
 
 import {
   createFloorStockRequestSchema,
+  completeFloorStockRequestSchema,
   emptyFloorStockRequestBodySchema,
   floorStockRequestLineRecordSchema,
   floorStockRequestRecordSchema,
@@ -27,7 +44,10 @@ import type {
   FloorStockRequestStatus,
   MutatedFloorStockRequestResult,
 } from "./types";
-import type { FloorStockRequestStore } from "./store";
+import type {
+  FloorStockRequestStore,
+  FloorStockRequestTransaction,
+} from "./store";
 
 const idempotencySchema = z
   .object({
@@ -151,6 +171,50 @@ function parseCompleteLineSet(
   return lines;
 }
 
+async function loadActiveLocation(
+  transaction: FloorStockRequestTransaction,
+  context: FloorStockRequestActorContext,
+  locationId: string,
+): Promise<InventoryLocationRecord> {
+  const location = inventoryLocationSchema.parse(
+    requiredRecord(await transaction.getLocation(locationId)),
+  );
+  if (
+    location.locationId !== locationId ||
+    location.status !== "active" ||
+    location.tenantId !== context.tenantId ||
+    location.platformId !== context.platformId ||
+    location.organizationId !== context.organizationId ||
+    location.facilityId !== context.activeFacilityId ||
+    location.kind === "virtual_adjustment"
+  )
+    fail("forbidden");
+  const visited = new Set([location.locationId]);
+  let parentId = location.parentLocationId;
+  for (let depth = 0; parentId; depth += 1) {
+    if (depth >= INVENTORY_MAX_LOCATION_DEPTH || visited.has(parentId))
+      fail("conflict");
+    visited.add(parentId);
+    const parent = inventoryLocationSchema.parse(
+      requiredRecord(await transaction.getLocation(parentId)),
+    );
+    if (
+      parent.locationId !== parentId ||
+      parent.status !== "active" ||
+      parent.tenantId !== location.tenantId ||
+      parent.platformId !== location.platformId ||
+      parent.organizationId !== location.organizationId ||
+      parent.facilityId !== location.facilityId ||
+      parent.kind === "virtual_adjustment" ||
+      (parent.departmentId !== null &&
+        parent.departmentId !== location.departmentId)
+    )
+      fail("conflict");
+    parentId = parent.parentLocationId;
+  }
+  return location;
+}
+
 const transition = (
   request: FloorStockRequestRecord,
   actorUid: string,
@@ -199,8 +263,15 @@ export function createFloorStockRequestService(
         const body =
           operation === "create"
             ? createFloorStockRequestSchema.parse(rawBody)
-            : emptyFloorStockRequestBodySchema.parse(rawBody);
+            : operation === "complete_fulfillment"
+              ? completeFloorStockRequestSchema.parse(rawBody)
+              : emptyFloorStockRequestBodySchema.parse(rawBody);
         if (operation === "create" && context.activeDepartmentId === null)
+          fail("forbidden");
+        if (
+          operation === "complete_fulfillment" &&
+          context.featureFlags.inventory !== true
+        )
           fail("forbidden");
 
         const idempotencyId = namespace(context, operation, correlationId);
@@ -307,6 +378,7 @@ export function createFloorStockRequestService(
                   requestedQuantity: inputLine.quantity,
                   approvedQuantity: null,
                   fulfilledQuantity: null,
+                  inventoryTransactionLineIds: [],
                 }),
               );
             }
@@ -333,6 +405,8 @@ export function createFloorStockRequestService(
               readyAt: null,
               deliveredAt: null,
               cancelledAt: null,
+              inventoryTransactionId: null,
+              fulfillmentSourceLocationId: null,
             });
             linesToCreate = validatedLines;
           } else {
@@ -381,24 +455,284 @@ export function createFloorStockRequestService(
               );
             } else if (operation === "complete_fulfillment") {
               assertStatus(request, "fulfilling");
+              const completion = completeFloorStockRequestSchema.parse(body);
               const rawLines = await transaction.listLines(
                 request.floorStockRequestId,
                 request.lineCount + 1,
               );
-              linesToSet = parseCompleteLineSet(rawLines, request).map(
-                (line) => {
+              const currentLines = parseCompleteLineSet(rawLines, request);
+              if (
+                completion.lines.length !== currentLines.length ||
+                new Set(completion.lines.map((line) => line.requestLineId))
+                  .size !== currentLines.length
+              )
+                fail("invalid_request");
+              const source = await loadActiveLocation(
+                transaction,
+                context,
+                completion.sourceLocationId,
+              );
+              if (
+                source.departmentId !== null ||
+                (source.kind !== "pharmacy" && source.kind !== "central_store")
+              )
+                fail("forbidden");
+
+              const completionByLine = new Map(
+                completion.lines.map((line) => [line.requestLineId, line]),
+              );
+              const inventoryTransactionId = `${auditId}-inventory`;
+              const inventoryLines: InventoryTransactionLineRecord[] = [];
+              const balances = new Map<
+                string,
+                {
+                  current: InventoryBalanceRecord | null;
+                  identity: InventoryBalanceIdentity;
+                  delta: number;
+                }
+              >();
+
+              const addBalanceDelta = async (
+                identity: InventoryBalanceIdentity,
+                delta: number,
+              ) => {
+                const expectedId = inventoryBalanceId(identity);
+                const cached = balances.get(expectedId);
+                if (cached) {
+                  cached.delta += delta;
+                  return expectedId;
+                }
+                const raw = await transaction.getBalance(expectedId);
+                const current = raw ? inventoryBalanceSchema.parse(raw) : null;
+                if (
+                  current &&
+                  (current.balanceId !== expectedId ||
+                    inventoryBalanceId({
+                      tenantId: current.tenantId,
+                      facilityId: current.facilityId,
+                      departmentId: current.departmentId,
+                      locationId: current.locationId,
+                      itemId: current.itemId,
+                      lotId: current.lotId,
+                      expiryDate: current.expiryDate,
+                      unit: current.unit,
+                    }) !== expectedId)
+                )
+                  fail("conflict");
+                balances.set(expectedId, { current, identity, delta });
+                return expectedId;
+              };
+
+              linesToSet = [];
+              for (const requestLine of currentLines) {
+                if (
+                  requestLine.approvedQuantity === null ||
+                  requestLine.fulfilledQuantity !== null ||
+                  requestLine.inventoryTransactionLineIds.length > 0
+                )
+                  fail("conflict");
+                const inputLine =
+                  completionByLine.get(requestLine.lineId) ??
+                  fail("invalid_request");
+                const enteredTotal = inputLine.allocations.reduce(
+                  (sum, allocation) => sum + allocation.quantity,
+                  0,
+                );
+                if (
+                  !Number.isSafeInteger(enteredTotal) ||
+                  enteredTotal !== requestLine.approvedQuantity
+                )
+                  fail("invalid_request");
+                const destination = await loadActiveLocation(
+                  transaction,
+                  context,
+                  requestLine.locationId,
+                );
+                if (
+                  destination.departmentId !== request.departmentId ||
+                  !["floor_stock", "ward", "clinic", "emergency_unit"].includes(
+                    destination.kind,
+                  )
+                )
+                  fail("forbidden");
+                const item = medicationItemSchema.parse(
+                  requiredRecord(await transaction.getItem(requestLine.itemId)),
+                );
+                if (
+                  item.itemId !== requestLine.itemId ||
+                  item.tenantId !== context.tenantId
+                )
+                  fail("forbidden");
+                if (item.status !== "active") fail("inactive_item");
+                const multiplier =
+                  inventoryConversionMultiplier(item, requestLine.unit) ??
+                  fail("invalid_request");
+                const transactionLineIds: string[] = [];
+
+                for (const allocation of inputLine.allocations) {
+                  const sourceRaw = inventoryBalanceSchema.parse(
+                    requiredRecord(
+                      await transaction.getBalance(allocation.balanceId),
+                    ),
+                  );
+                  const sourceIdentity: InventoryBalanceIdentity = {
+                    tenantId: sourceRaw.tenantId,
+                    facilityId: sourceRaw.facilityId,
+                    departmentId: sourceRaw.departmentId,
+                    locationId: sourceRaw.locationId,
+                    itemId: sourceRaw.itemId,
+                    lotId: sourceRaw.lotId,
+                    expiryDate: sourceRaw.expiryDate,
+                    unit: sourceRaw.unit,
+                  };
                   if (
-                    line.approvedQuantity === null ||
-                    line.fulfilledQuantity !== null
+                    sourceRaw.balanceId !== allocation.balanceId ||
+                    inventoryBalanceId(sourceIdentity) !==
+                      allocation.balanceId ||
+                    sourceRaw.tenantId !== context.tenantId ||
+                    sourceRaw.facilityId !== context.activeFacilityId ||
+                    sourceRaw.departmentId !== null ||
+                    sourceRaw.locationId !== source.locationId ||
+                    sourceRaw.itemId !== item.itemId ||
+                    sourceRaw.unit !== item.baseUnit ||
+                    sourceRaw.quantity <= 0
                   )
                     fail("conflict");
-                  return {
-                    ...line,
-                    fulfilledQuantity: line.approvedQuantity,
-                  };
-                },
-              );
-              request = transition(request, context.uid, "ready", timestamp);
+                  if (item.lotControlled !== (sourceRaw.lotId !== null))
+                    fail("conflict");
+                  if (!item.lotControlled && sourceRaw.expiryDate !== null)
+                    fail("conflict");
+                  if (sourceRaw.lotId) {
+                    const lot = inventoryLotSchema.parse(
+                      requiredRecord(await transaction.getLot(sourceRaw.lotId)),
+                    );
+                    if (
+                      lot.status !== "active" ||
+                      lot.tenantId !== context.tenantId ||
+                      lot.facilityId !== context.activeFacilityId ||
+                      lot.itemId !== item.itemId ||
+                      lot.expiryDate !== sourceRaw.expiryDate
+                    )
+                      fail("conflict");
+                    if (
+                      item.expiryControlled &&
+                      isExpiredDateOnly(lot.expiryDate, now())
+                    )
+                      fail("expired_lot");
+                  } else if (item.expiryControlled) {
+                    fail("conflict");
+                  }
+                  const baseQuantity = allocation.quantity * multiplier;
+                  if (
+                    !Number.isSafeInteger(baseQuantity) ||
+                    baseQuantity > INVENTORY_MAX_BALANCE_QUANTITY
+                  )
+                    fail("invalid_request");
+                  await addBalanceDelta(sourceIdentity, -baseQuantity);
+                  await addBalanceDelta(
+                    {
+                      ...sourceIdentity,
+                      departmentId: destination.departmentId,
+                      locationId: destination.locationId,
+                    },
+                    baseQuantity,
+                  );
+                  const inventoryLineId = `${inventoryTransactionId}-${inventoryLines.length + 1}`;
+                  transactionLineIds.push(inventoryLineId);
+                  inventoryLines.push({
+                    schemaVersion: 1,
+                    lineId: inventoryLineId,
+                    transactionId: inventoryTransactionId,
+                    lineNumber: inventoryLines.length + 1,
+                    itemId: item.itemId,
+                    lotId: sourceRaw.lotId,
+                    expiryDate: sourceRaw.expiryDate,
+                    enteredUnit: requestLine.unit,
+                    enteredQuantity: allocation.quantity,
+                    baseUnit: item.baseUnit,
+                    baseQuantity,
+                    sourceLocationId: source.locationId,
+                    destinationLocationId: destination.locationId,
+                    floorStockRequestId: request.floorStockRequestId,
+                    floorStockRequestLineId: requestLine.lineId,
+                  });
+                }
+                linesToSet.push({
+                  ...requestLine,
+                  fulfilledQuantity: requestLine.approvedQuantity,
+                  inventoryTransactionLineIds: transactionLineIds,
+                });
+              }
+
+              const balanceMutations: InventoryBalanceRecord[] = [];
+              for (const [balanceId, state] of balances) {
+                const quantity = (state.current?.quantity ?? 0) + state.delta;
+                if (
+                  !Number.isSafeInteger(quantity) ||
+                  Math.abs(quantity) > INVENTORY_MAX_BALANCE_QUANTITY
+                )
+                  fail("conflict");
+                if (quantity < 0) fail("insufficient_stock");
+                balanceMutations.push({
+                  schemaVersion: 1,
+                  balanceId,
+                  ...state.identity,
+                  quantity,
+                  version: (state.current?.version ?? 0) + 1,
+                  updatedAt: timestamp,
+                  lastTransactionId: inventoryTransactionId,
+                });
+              }
+              const inventoryRecord: InventoryTransactionRecord = {
+                schemaVersion: 1,
+                transactionId: inventoryTransactionId,
+                type: "request_fulfillment",
+                status: "posted",
+                actorUid: context.uid,
+                requestId: correlationId,
+                tenantId: context.tenantId,
+                platformId: context.platformId,
+                organizationId: context.organizationId,
+                facilityId: context.activeFacilityId,
+                sourceDepartmentId: null,
+                destinationDepartmentId: request.departmentId,
+                sourceLocationId: source.locationId,
+                destinationLocationId: null,
+                reasonCode: "floor_stock_request",
+                lineCount: inventoryLines.length,
+                postedAt: timestamp,
+                metadata: sanitizeAuditMetadata({
+                  floorStockRequestId: request.floorStockRequestId,
+                }),
+              };
+              request = {
+                ...transition(request, context.uid, "ready", timestamp),
+                inventoryTransactionId,
+                fulfillmentSourceLocationId: source.locationId,
+              };
+              transaction.createInventoryTransaction(inventoryRecord);
+              for (const line of inventoryLines)
+                transaction.createInventoryLine(line);
+              for (const balance of balanceMutations)
+                transaction.setInventoryBalance(balance);
+              transaction.createInventoryAudit({
+                schemaVersion: 1,
+                eventId: `${auditId}-inventory-audit`,
+                actorUid: context.uid,
+                action: "request_fulfillment",
+                targetType: "inventory_transaction",
+                targetId: inventoryTransactionId,
+                requestId: correlationId,
+                tenantId: context.tenantId,
+                facilityId: context.activeFacilityId,
+                sourceDepartmentId: null,
+                destinationDepartmentId: request.departmentId,
+                timestamp,
+                metadata: sanitizeAuditMetadata({
+                  floorStockRequestId: request.floorStockRequestId,
+                  lineCount: inventoryLines.length,
+                }),
+              });
             } else if (operation === "deliver") {
               assertStatus(request, "ready");
               request = transition(

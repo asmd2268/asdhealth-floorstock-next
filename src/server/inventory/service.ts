@@ -18,6 +18,10 @@ import {
   transferInventorySchema,
   issueInventorySchema,
 } from "@/domain/inventory/schemas";
+import {
+  inventoryBalanceId,
+  inventoryConversionMultiplier,
+} from "@/domain/inventory/balances";
 import type {
   InventoryStore,
   InventoryTransactionStore,
@@ -31,7 +35,6 @@ import type {
   InventoryLocationRecord,
   InventoryOperation,
   InventoryPostingInput,
-  InventoryPostingLineInput,
   InventoryResult,
   InventoryTransactionLineRecord,
   InventoryTransactionRecord,
@@ -73,13 +76,6 @@ function payloadHash(input: InventoryPostingInput): string {
   return createHash("sha256")
     .update("asdhealth:inventory-payload:v1\0", "utf8")
     .update(JSON.stringify(input), "utf8")
-    .digest("hex");
-}
-
-function balanceId(identity: InventoryBalanceIdentity): string {
-  return createHash("sha256")
-    .update("asdhealth:inventory-balance:v1\0", "utf8")
-    .update(JSON.stringify(identity))
     .digest("hex");
 }
 
@@ -162,18 +158,6 @@ async function loadLocation(
   return location;
 }
 
-function conversionMultiplier(
-  item: ReturnType<typeof medicationItemSchema.parse>,
-  unit: InventoryPostingLineInput["unit"],
-): number {
-  if (unit === item.baseUnit) return 1;
-  const conversion = item.unitConversions.find(
-    (candidate) => candidate.fromUnit === unit,
-  );
-  if (!conversion) fail("invalid_request");
-  return conversion!.toBaseUnitMultiplier;
-}
-
 export function createInventoryService(
   store: InventoryStore,
   dependencies: { now?: () => Date; id?: () => string } = {},
@@ -253,7 +237,9 @@ export function createInventoryService(
               fail("not_found");
             const item = itemResult.data!;
             if (item.status !== "active") fail("inactive_item");
-            const multiplier = conversionMultiplier(item, line.unit);
+            const multiplier =
+              inventoryConversionMultiplier(item, line.unit) ??
+              fail("invalid_request");
             const baseQuantity = line.quantity * multiplier;
             if (
               !Number.isSafeInteger(baseQuantity) ||
@@ -314,7 +300,7 @@ export function createInventoryService(
                 expiryDate,
                 unit: item.baseUnit,
               };
-              const targetBalanceId = balanceId(identity);
+              const targetBalanceId = inventoryBalanceId(identity);
               if (seenBalances.has(targetBalanceId)) fail("conflict");
               seenBalances.add(targetBalanceId);
               const currentRaw = await transaction.getBalance(targetBalanceId);
@@ -370,6 +356,10 @@ export function createInventoryService(
               enteredQuantity: line.quantity,
               baseUnit: item.baseUnit,
               baseQuantity,
+              sourceLocationId: source?.locationId ?? null,
+              destinationLocationId: destination?.locationId ?? null,
+              floorStockRequestId: null,
+              floorStockRequestLineId: null,
             });
           }
 

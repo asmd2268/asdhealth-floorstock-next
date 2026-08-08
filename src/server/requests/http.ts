@@ -25,6 +25,8 @@ const statuses = {
   conflict: 409,
   inactive_configuration: 409,
   inactive_item: 409,
+  insufficient_stock: 409,
+  expired_lot: 409,
   provider_unavailable: 503,
 } as const;
 

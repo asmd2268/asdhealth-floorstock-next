@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { inventoryBalanceId } from "@/domain/inventory/balances";
+import type {
+  InventoryAuditEventRecord,
+  InventoryBalanceRecord,
+  InventoryTransactionLineRecord,
+  InventoryTransactionRecord,
+} from "@/domain/inventory/types";
+
 import type {
   FloorStockRequestStore,
   FloorStockRequestTransaction,
@@ -37,6 +45,7 @@ const pharmacyContext: FloorStockRequestActorContext = {
   uid: "pharmacy-user-1",
   activeDepartmentId: null,
   trustedStateFingerprint: "fingerprint-pharmacy",
+  featureFlags: { new_request: true, inventory: true },
 };
 
 const configuration = {
@@ -87,6 +96,25 @@ const location = {
   status: "active",
 };
 
+const pharmacyLocation = {
+  ...location,
+  locationId: "pharmacy-1",
+  departmentId: null,
+  kind: "pharmacy",
+  displayName: "Main pharmacy",
+};
+
+const sourceBalanceId = inventoryBalanceId({
+  tenantId: "tenant-1",
+  facilityId: "facility-1",
+  departmentId: null,
+  locationId: "pharmacy-1",
+  itemId: "item-1",
+  lotId: null,
+  expiryDate: null,
+  unit: "tablet",
+});
+
 class FakeStore implements FloorStockRequestStore {
   authorized = true;
   failAudit = false;
@@ -94,7 +122,35 @@ class FakeStore implements FloorStockRequestStore {
     ["configuration-1", configuration],
   ]);
   items = new Map<string, unknown>([["item-1", item]]);
-  locations = new Map<string, unknown>([["location-1", location]]);
+  locations = new Map<string, unknown>([
+    ["location-1", location],
+    ["pharmacy-1", pharmacyLocation],
+  ]);
+  lots = new Map<string, unknown>();
+  balances = new Map<string, InventoryBalanceRecord>([
+    [
+      sourceBalanceId,
+      {
+        schemaVersion: 1,
+        balanceId: sourceBalanceId,
+        tenantId: "tenant-1",
+        facilityId: "facility-1",
+        departmentId: null,
+        locationId: "pharmacy-1",
+        itemId: "item-1",
+        lotId: null,
+        expiryDate: null,
+        unit: "tablet",
+        quantity: 100,
+        version: 1,
+        updatedAt: "2028-01-01T00:00:00.000Z",
+        lastTransactionId: "opening-balance",
+      },
+    ],
+  ]);
+  inventoryTransactions = new Map<string, InventoryTransactionRecord>();
+  inventoryLines = new Map<string, InventoryTransactionLineRecord>();
+  inventoryAudits = new Map<string, InventoryAuditEventRecord>();
   requests = new Map<string, FloorStockRequestRecord>();
   lines = new Map<string, FloorStockRequestLineRecord>();
   markers = new Map<string, unknown>();
@@ -110,6 +166,8 @@ class FakeStore implements FloorStockRequestStore {
       getConfiguration: async (id) => this.configurations.get(id) ?? null,
       getItem: async (id) => this.items.get(id) ?? null,
       getLocation: async (id) => this.locations.get(id) ?? null,
+      getLot: async (id) => this.lots.get(id) ?? null,
+      getBalance: async (id) => this.balances.get(id) ?? null,
       getIdempotency: async (id) => this.markers.get(id) ?? null,
       listLines: async (requestId, maximum) =>
         [...this.lines.values()]
@@ -134,6 +192,16 @@ class FakeStore implements FloorStockRequestStore {
       },
       createIdempotency: (record) =>
         pending.push(() => this.markers.set(record.namespaceId, record)),
+      createInventoryTransaction: (record) =>
+        pending.push(() =>
+          this.inventoryTransactions.set(record.transactionId, record),
+        ),
+      createInventoryLine: (record) =>
+        pending.push(() => this.inventoryLines.set(record.lineId, record)),
+      setInventoryBalance: (record) =>
+        pending.push(() => this.balances.set(record.balanceId, record)),
+      createInventoryAudit: (record) =>
+        pending.push(() => this.inventoryAudits.set(record.eventId, record)),
     };
     const result = await operation(transaction);
     pending.forEach((commit) => commit());
@@ -163,6 +231,36 @@ async function createDraft(store: FakeStore) {
       lines: [{ configurationId: "configuration-1", quantity: 12 }],
     },
   );
+}
+
+function fulfillmentBody(quantity: number) {
+  return {
+    sourceLocationId: "pharmacy-1",
+    lines: [
+      {
+        requestLineId: "floor-request-1-line-1",
+        allocations: [{ balanceId: sourceBalanceId, quantity }],
+      },
+    ],
+  };
+}
+
+async function prepareFulfilling(store: FakeStore, quantity = 8) {
+  const service = target(store);
+  const id = "floor-request-1";
+  await service.mutate(departmentContext, "create", "prepare-1", null, {
+    lines: [{ configurationId: "configuration-1", quantity }],
+  });
+  await service.mutate(departmentContext, "submit", "prepare-2", id, {});
+  await service.mutate(pharmacyContext, "approve", "prepare-3", id, {});
+  await service.mutate(
+    pharmacyContext,
+    "start_fulfillment",
+    "prepare-4",
+    id,
+    {},
+  );
+  return { service, id };
 }
 
 describe("floor-stock request service", () => {
@@ -221,10 +319,15 @@ describe("floor-stock request service", () => {
         "complete_fulfillment",
         "c-5",
         id,
-        {},
+        fulfillmentBody(8),
       ),
     ).toMatchObject({ ok: true, value: { status: "ready" } });
     expect([...store.lines.values()][0]?.fulfilledQuantity).toBe(8);
+    expect(store.inventoryTransactions.get("audit-5-inventory")).toMatchObject({
+      type: "request_fulfillment",
+      lineCount: 1,
+      destinationDepartmentId: "department-1",
+    });
     expect(
       await service.mutate(pharmacyContext, "deliver", "c-6", id, {}),
     ).toMatchObject({ ok: true, value: { status: "delivered" } });
@@ -374,5 +477,75 @@ describe("floor-stock request service", () => {
     expect(store.requests.size).toBe(0);
     expect(store.lines.size).toBe(0);
     expect(store.markers.size).toBe(0);
+  });
+
+  it("rejects insufficient source stock without partially posting inventory", async () => {
+    const store = new FakeStore();
+    store.balances.set(sourceBalanceId, {
+      ...store.balances.get(sourceBalanceId)!,
+      quantity: 4,
+    });
+    const { service, id } = await prepareFulfilling(store);
+    const result = await service.mutate(
+      pharmacyContext,
+      "complete_fulfillment",
+      "complete-insufficient",
+      id,
+      fulfillmentBody(8),
+    );
+    expect(result).toEqual({ ok: false, code: "insufficient_stock" });
+    expect(store.requests.get(id)?.status).toBe("fulfilling");
+    expect(store.balances.get(sourceBalanceId)?.quantity).toBe(4);
+    expect(store.inventoryTransactions.size).toBe(0);
+    expect([...store.lines.values()][0]?.fulfilledQuantity).toBeNull();
+  });
+
+  it("rolls back both request and inventory writes when request audit fails", async () => {
+    const store = new FakeStore();
+    const { service, id } = await prepareFulfilling(store);
+    store.failAudit = true;
+    const result = await service.mutate(
+      pharmacyContext,
+      "complete_fulfillment",
+      "complete-audit-failure",
+      id,
+      fulfillmentBody(8),
+    );
+    expect(result).toEqual({ ok: false, code: "provider_unavailable" });
+    expect(store.requests.get(id)?.status).toBe("fulfilling");
+    expect(store.balances.get(sourceBalanceId)?.quantity).toBe(100);
+    expect(store.inventoryTransactions.size).toBe(0);
+    expect(store.inventoryLines.size).toBe(0);
+    expect(store.inventoryAudits.size).toBe(0);
+  });
+
+  it("binds fulfillment idempotency to the selected allocation payload", async () => {
+    const store = new FakeStore();
+    const { service, id } = await prepareFulfilling(store);
+    const body = fulfillmentBody(8);
+    const first = await service.mutate(
+      pharmacyContext,
+      "complete_fulfillment",
+      "complete-key",
+      id,
+      body,
+    );
+    expect(first).toMatchObject({ ok: true, value: { duplicate: false } });
+    const replay = await service.mutate(
+      pharmacyContext,
+      "complete_fulfillment",
+      "complete-key",
+      id,
+      body,
+    );
+    expect(replay).toMatchObject({ ok: true, value: { duplicate: true } });
+    const altered = await service.mutate(
+      pharmacyContext,
+      "complete_fulfillment",
+      "complete-key",
+      id,
+      fulfillmentBody(7),
+    );
+    expect(altered).toEqual({ ok: false, code: "conflict" });
   });
 });

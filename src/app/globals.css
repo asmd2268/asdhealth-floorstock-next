@@ -225,7 +225,8 @@ a {
   gap: 8px;
 }
 .request-create button,
-.request-actions button {
+.request-actions button,
+.request-actions a {
   min-height: 38px;
   padding-inline: 14px;
   border: 0;
@@ -233,12 +234,16 @@ a {
   background: var(--accent);
   color: white;
   font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 .request-create button {
   justify-self: start;
 }
 .request-create button:disabled,
-.request-actions button:disabled {
+.request-actions button:disabled,
+.request-fulfillment button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -246,6 +251,45 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+.request-fulfillment {
+  display: grid;
+  gap: 18px;
+}
+.request-fulfillment > label,
+.request-fulfillment fieldset {
+  display: grid;
+  gap: 10px;
+}
+.request-fulfillment select,
+.request-fulfillment input[type="number"] {
+  min-height: 42px;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+}
+.request-fulfillment fieldset {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fbfb;
+}
+.request-fulfillment fieldset label {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(100px, 160px);
+  gap: 12px;
+  align-items: center;
+}
+.request-fulfillment button {
+  min-height: 42px;
+  justify-self: start;
+  padding-inline: 16px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
 }
 .request-status {
   display: inline-flex;
@@ -275,6 +319,9 @@ a {
 
 @media (max-width: 700px) {
   .request-configurations > div {
+    grid-template-columns: 1fr;
+  }
+  .request-fulfillment fieldset label {
     grid-template-columns: 1fr;
   }
 }
