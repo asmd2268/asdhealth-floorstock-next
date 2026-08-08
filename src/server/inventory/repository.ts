@@ -10,6 +10,7 @@ import {
 import {
   inventoryBalanceSchema,
   inventoryLocationSchema,
+  inventoryTransactionLineSchema,
   inventoryTransactionSchema,
   medicationItemSchema,
   INVENTORY_PAGE_SIZE,
@@ -22,6 +23,12 @@ import type {
   InventoryPage,
   InventoryTransactionSummary,
 } from "@/domain/inventory/types";
+import { reconcileInventorySnapshot } from "@/domain/inventory/reconciliation";
+import type {
+  InventoryDirectoryFilters,
+  InventoryTransactionLineRecord,
+} from "@/domain/inventory/types";
+import type { InventoryReconciliationReport } from "@/domain/inventory/reconciliation";
 import { getFirebaseAdminApp } from "@/server/firebase-admin/app";
 import { requireCanonicalTrustedIdentifier } from "@/services/firebase/trusted-identifier";
 
@@ -40,6 +47,8 @@ export interface InventoryDirectoryCursors {
   balances?: string;
   transactions?: string;
 }
+
+export const INVENTORY_RECONCILIATION_READ_LIMIT = 201;
 
 async function page(query: Query): Promise<{
   rows: readonly { id: string; data: unknown }[];
@@ -62,6 +71,7 @@ export function createInventoryQueryRepository(firestore: Firestore) {
     async load(
       context: InventoryActorContext,
       rawCursors: InventoryDirectoryCursors = {},
+      filters: InventoryDirectoryFilters = {},
     ): Promise<InventoryDirectorySnapshot> {
       const ordered = (
         collection: string,
@@ -102,6 +112,11 @@ export function createInventoryQueryRepository(firestore: Firestore) {
               [
                 ["tenantId", context.tenantId],
                 ["facilityId", context.activeFacilityId],
+                ...(filters.locationId
+                  ? [["locationId", filters.locationId] as [string, string]]
+                  : filters.itemId
+                    ? [["itemId", filters.itemId] as [string, string]]
+                    : []),
               ],
               rawCursors.balances,
             ),
@@ -112,6 +127,9 @@ export function createInventoryQueryRepository(firestore: Firestore) {
               [
                 ["tenantId", context.tenantId],
                 ["facilityId", context.activeFacilityId],
+                ...(filters.transactionType
+                  ? [["type", filters.transactionType] as [string, string]]
+                  : []),
               ],
               rawCursors.transactions,
             ),
@@ -246,6 +264,88 @@ export function createInventoryQueryRepository(firestore: Firestore) {
           nextCursor: transactionPage.nextCursor,
         },
       };
+    },
+    async reconcile(
+      context: InventoryActorContext,
+      filters: InventoryDirectoryFilters = {},
+    ): Promise<InventoryReconciliationReport> {
+      const base = firestore
+        .collection(inventoryCollections.balances)
+        .where("tenantId", "==", context.tenantId)
+        .where("facilityId", "==", context.activeFacilityId)
+        .orderBy(FieldPath.documentId());
+      const balanceQuery = filters.locationId
+        ? base.where("locationId", "==", filters.locationId)
+        : filters.itemId
+          ? base.where("itemId", "==", filters.itemId)
+          : base;
+      const transactionBase = firestore
+        .collection(inventoryCollections.transactions)
+        .where("tenantId", "==", context.tenantId)
+        .where("facilityId", "==", context.activeFacilityId)
+        .orderBy(FieldPath.documentId());
+      const transactionQuery = filters.transactionType
+        ? transactionBase.where("type", "==", filters.transactionType)
+        : transactionBase;
+      const [balanceSnapshot, transactionSnapshot] = await Promise.all([
+        balanceQuery.limit(INVENTORY_RECONCILIATION_READ_LIMIT).get(),
+        transactionQuery.limit(INVENTORY_RECONCILIATION_READ_LIMIT).get(),
+      ]);
+      if (
+        balanceSnapshot.size >= INVENTORY_RECONCILIATION_READ_LIMIT ||
+        transactionSnapshot.size >= INVENTORY_RECONCILIATION_READ_LIMIT
+      )
+        throw new Error("Inventory reconciliation read limit exceeded");
+      const balances = balanceSnapshot.docs.map((document) => {
+        const value = inventoryBalanceSchema.parse(document.data());
+        if (
+          value.balanceId !== document.id ||
+          value.tenantId !== context.tenantId ||
+          value.facilityId !== context.activeFacilityId
+        )
+          throw new Error("Balance scope mismatch");
+        return value;
+      });
+      const transactions = transactionSnapshot.docs.map((document) => {
+        const value = inventoryTransactionSchema.parse(document.data());
+        if (
+          value.transactionId !== document.id ||
+          value.tenantId !== context.tenantId ||
+          value.facilityId !== context.activeFacilityId
+        )
+          throw new Error("Transaction scope mismatch");
+        return value;
+      });
+      const lineEntries = await Promise.all(
+        transactions.map(async (transaction) => {
+          const snapshot = await firestore
+            .collection(
+              [
+                inventoryCollections.transactions,
+                transaction.transactionId,
+                inventoryCollections.lines,
+              ].join("/"),
+            )
+            .orderBy("lineNumber")
+            .limit(transaction.lineCount + 1)
+            .get();
+          const lines = snapshot.docs.map((document) => {
+            const value = inventoryTransactionLineSchema.parse(document.data());
+            if (
+              value.lineId !== document.id ||
+              value.transactionId !== transaction.transactionId
+            )
+              throw new Error("Transaction line scope mismatch");
+            return value;
+          });
+          return [transaction.transactionId, lines] as const;
+        }),
+      );
+      return reconcileInventorySnapshot(
+        balances,
+        transactions,
+        new Map<string, readonly InventoryTransactionLineRecord[]>(lineEntries),
+      );
     },
   };
 }

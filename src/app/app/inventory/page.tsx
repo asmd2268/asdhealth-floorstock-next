@@ -5,6 +5,9 @@ import { InventoryProvisioningForms } from "@/components/inventory/inventory-pro
 import { baseBrand } from "@/config/platform";
 import { resolveScopedPermission } from "@/domain/access/permissions";
 import type { InventoryOperation } from "@/domain/inventory/types";
+import { inventoryTransactionTypes } from "@/domain/inventory/types";
+import type { InventoryReconciliationReport } from "@/domain/inventory/reconciliation";
+import { provisioningIdentifierSchema } from "@/domain/provisioning/schemas";
 import {
   inventoryProvisioningOperations,
   inventoryProvisioningResource,
@@ -14,7 +17,11 @@ import { loadInventoryPageContext } from "@/server/inventory/page-context";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const result = await loadInventoryPageContext();
   const labels = result.dictionary.inventory;
   if (!result.ok)
@@ -28,9 +35,37 @@ export default async function InventoryPage() {
         <Link href="/app">{labels.backToApp}</Link>
       </main>
     );
+  const params = searchParams ? await searchParams : {};
+  const single = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+  const rawItemId = single(params.itemId);
+  const rawLocationId = single(params.locationId);
+  const rawTransactionType = single(params.transactionType);
+  const filters = {
+    ...(rawItemId && provisioningIdentifierSchema.safeParse(rawItemId).success
+      ? { itemId: rawItemId }
+      : {}),
+    ...(rawLocationId &&
+    provisioningIdentifierSchema.safeParse(rawLocationId).success
+      ? { locationId: rawLocationId }
+      : {}),
+    ...(rawTransactionType &&
+    (inventoryTransactionTypes as readonly string[]).includes(
+      rawTransactionType,
+    )
+      ? {
+          transactionType:
+            rawTransactionType as (typeof inventoryTransactionTypes)[number],
+        }
+      : {}),
+  };
   let directory;
   try {
-    directory = await getInventoryQueryRepository().load(result.context);
+    directory = await getInventoryQueryRepository().load(
+      result.context,
+      {},
+      filters,
+    );
   } catch {
     return (
       <main
@@ -42,6 +77,14 @@ export default async function InventoryPage() {
         <Link href="/app">{labels.backToApp}</Link>
       </main>
     );
+  }
+  let reconciliation: InventoryReconciliationReport | null = null;
+  try {
+    reconciliation = await getInventoryQueryRepository().reconcile(
+      result.context,
+    );
+  } catch {
+    reconciliation = null;
   }
   const actionByOperation = {
     receive: "receive",
@@ -121,6 +164,78 @@ export default async function InventoryPage() {
           operations={operations}
           labels={labels}
         />
+        <section className="inventory-reconciliation">
+          <h2>{labels.reconciliation}</h2>
+          <p>{labels.reconciliationDescription}</p>
+          <form method="get" className="inventory-filter-form">
+            <label>
+              {labels.itemCode}
+              <select name="itemId" defaultValue={filters.itemId ?? ""}>
+                <option value="">{labels.clearFilters}</option>
+                {directory.items.items.map((item) => (
+                  <option key={item.itemId} value={item.itemId}>
+                    {item.itemCode} — {item.genericName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {labels.location}
+              <select name="locationId" defaultValue={filters.locationId ?? ""}>
+                <option value="">{labels.clearFilters}</option>
+                {directory.locations.items.map((location) => (
+                  <option key={location.locationId} value={location.locationId}>
+                    {location.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {labels.operation}
+              <select
+                name="transactionType"
+                defaultValue={filters.transactionType ?? ""}
+              >
+                <option value="">{labels.clearFilters}</option>
+                {inventoryTransactionTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {labels.transactionTypes[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit">{labels.filter}</button>
+          </form>
+          {reconciliation ? (
+            <>
+              <div className="inventory-reconciliation-summary">
+                <span>
+                  {labels.checkedBalances}: {reconciliation.checkedBalances}
+                </span>
+                <span>
+                  {labels.checkedTransactions}:{" "}
+                  {reconciliation.checkedTransactions}
+                </span>
+                <span>
+                  {labels.checkedLines}: {reconciliation.checkedLines}
+                </span>
+              </div>
+              {reconciliation.anomalies.length ? (
+                <ul>
+                  {reconciliation.anomalies.map((anomaly) => (
+                    <li key={`${anomaly.code}:${anomaly.recordId}`}>
+                      {anomaly.code} · {anomaly.recordId} · {anomaly.detail}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{labels.healthy}</p>
+              )}
+            </>
+          ) : (
+            <p>{labels.reconciliationUnavailable}</p>
+          )}
+        </section>
         <section>
           <h2>{labels.items}</h2>
           {directory.items.items.length ? (

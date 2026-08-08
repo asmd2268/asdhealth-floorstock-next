@@ -164,6 +164,16 @@ export interface Dictionary {
     success: string;
     error: string;
     accessDenied: string;
+    filter: string;
+    clearFilters: string;
+    reconciliation: string;
+    reconciliationDescription: string;
+    checkedBalances: string;
+    checkedTransactions: string;
+    checkedLines: string;
+    healthy: string;
+    anomalies: string;
+    reconciliationUnavailable: string;
     provisioning: {
       title: string;
       description: string;
@@ -457,6 +467,17 @@ const en: Dictionary = {
     success: "Movement posted securely.",
     error: "The movement could not be posted.",
     accessDenied: "Inventory access is not available for this session.",
+    filter: "Filter inventory",
+    clearFilters: "Clear filters",
+    reconciliation: "Integrity reconciliation",
+    reconciliationDescription:
+      "Checks balance identities, transaction links, and immutable line sequences within the bounded facility window.",
+    checkedBalances: "Balances checked",
+    checkedTransactions: "Transactions checked",
+    checkedLines: "Lines checked",
+    healthy: "No integrity anomalies were found.",
+    anomalies: "Anomalies",
+    reconciliationUnavailable: "Reconciliation is temporarily unavailable.",
     provisioning: {
       title: "Inventory provisioning",
       description:
@@ -774,6 +795,17 @@ const ar: Dictionary = {
     success: "تم تسجيل الحركة بأمان.",
     error: "تعذر تسجيل الحركة.",
     accessDenied: "الوصول إلى المخزون غير متاح لهذه الجلسة.",
+    filter: "تصفية المخزون",
+    clearFilters: "مسح التصفية",
+    reconciliation: "فحص سلامة المخزون",
+    reconciliationDescription:
+      "يفحص هويات الأرصدة وروابط الحركات وتسلسل البنود غير القابلة للتعديل ضمن نطاق المنشأة.",
+    checkedBalances: "الأرصدة المفحوصة",
+    checkedTransactions: "الحركات المفحوصة",
+    checkedLines: "البنود المفحوصة",
+    healthy: "لم يتم العثور على أي خلل في السلامة.",
+    anomalies: "الاختلالات",
+    reconciliationUnavailable: "فحص السلامة غير متاح مؤقتًا.",
     provisioning: {
       title: "تزويد بيانات المخزون",
       description:
