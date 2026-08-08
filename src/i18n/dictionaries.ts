@@ -181,6 +181,8 @@ export interface Dictionary {
     current: string;
     reorderThreshold: string;
     recommended: string;
+    configurations: string;
+    belowReorder: string;
     provisioning: {
       title: string;
       description: string;
@@ -494,6 +496,8 @@ const en: Dictionary = {
     current: "Current",
     reorderThreshold: "Reorder threshold",
     recommended: "Recommended",
+    configurations: "Configurations",
+    belowReorder: "Below reorder",
     provisioning: {
       title: "Inventory provisioning",
       description:
@@ -830,6 +834,8 @@ const ar: Dictionary = {
     current: "الحالي",
     reorderThreshold: "حد إعادة الطلب",
     recommended: "الموصى به",
+    configurations: "الإعدادات",
+    belowReorder: "دون حد إعادة الطلب",
     provisioning: {
       title: "تزويد بيانات المخزون",
       description:
