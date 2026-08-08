@@ -8,6 +8,7 @@ import type { InventoryOperation } from "@/domain/inventory/types";
 import { inventoryTransactionTypes } from "@/domain/inventory/types";
 import type { InventoryReconciliationReport } from "@/domain/inventory/reconciliation";
 import type { InventoryReplenishmentRecommendation } from "@/domain/inventory/replenishment";
+import { summarizeInventoryOperations } from "@/domain/inventory/operational-report";
 import { provisioningIdentifierSchema } from "@/domain/provisioning/schemas";
 import {
   inventoryProvisioningOperations,
@@ -178,44 +179,64 @@ export default async function InventoryPage({
           <h2>{labels.replenishment}</h2>
           <p>{labels.replenishmentDescription}</p>
           {replenishment?.length ? (
-            <div className="inventory-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{labels.medication}</th>
-                    <th>{labels.location}</th>
-                    <th>{labels.current}</th>
-                    <th>{labels.reorderThreshold}</th>
-                    <th>{labels.recommended}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {replenishment.map((row) => {
-                    const item = directory.items.items.find(
-                      (candidate) => candidate.itemId === row.itemId,
-                    );
-                    const location = directory.locations.items.find(
-                      (candidate) => candidate.locationId === row.locationId,
-                    );
-                    return (
-                      <tr key={row.configurationId}>
-                        <td>{item?.itemCode ?? row.itemId}</td>
-                        <td>{location?.displayName ?? row.locationId}</td>
-                        <td>
-                          {row.currentQuantity} {row.unit}
-                        </td>
-                        <td>
-                          {row.reorderThreshold} {row.unit}
-                        </td>
-                        <td>
-                          {row.recommendedQuantity} {row.unit}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="inventory-reconciliation-summary">
+                {(() => {
+                  const summary = summarizeInventoryOperations(replenishment);
+                  return (
+                    <>
+                      <span>
+                        {labels.configurations}: {summary.configurationCount}
+                      </span>
+                      <span>
+                        {labels.belowReorder}: {summary.belowReorderCount}
+                      </span>
+                      <span>
+                        {labels.recommended}: {summary.recommendedUnitCount}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="inventory-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{labels.medication}</th>
+                      <th>{labels.location}</th>
+                      <th>{labels.current}</th>
+                      <th>{labels.reorderThreshold}</th>
+                      <th>{labels.recommended}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {replenishment.map((row) => {
+                      const item = directory.items.items.find(
+                        (candidate) => candidate.itemId === row.itemId,
+                      );
+                      const location = directory.locations.items.find(
+                        (candidate) => candidate.locationId === row.locationId,
+                      );
+                      return (
+                        <tr key={row.configurationId}>
+                          <td>{item?.itemCode ?? row.itemId}</td>
+                          <td>{location?.displayName ?? row.locationId}</td>
+                          <td>
+                            {row.currentQuantity} {row.unit}
+                          </td>
+                          <td>
+                            {row.reorderThreshold} {row.unit}
+                          </td>
+                          <td>
+                            {row.recommendedQuantity} {row.unit}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : replenishment ? (
             <p>{labels.noReplenishment}</p>
           ) : (
