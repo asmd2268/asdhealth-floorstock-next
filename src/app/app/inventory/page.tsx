@@ -7,6 +7,7 @@ import { resolveScopedPermission } from "@/domain/access/permissions";
 import type { InventoryOperation } from "@/domain/inventory/types";
 import { inventoryTransactionTypes } from "@/domain/inventory/types";
 import type { InventoryReconciliationReport } from "@/domain/inventory/reconciliation";
+import type { InventoryReplenishmentRecommendation } from "@/domain/inventory/replenishment";
 import { provisioningIdentifierSchema } from "@/domain/provisioning/schemas";
 import {
   inventoryProvisioningOperations,
@@ -86,6 +87,15 @@ export default async function InventoryPage({
   } catch {
     reconciliation = null;
   }
+  let replenishment: readonly InventoryReplenishmentRecommendation[] | null =
+    null;
+  try {
+    replenishment = await getInventoryQueryRepository().replenishment(
+      result.context,
+    );
+  } catch {
+    replenishment = null;
+  }
   const actionByOperation = {
     receive: "receive",
     issue: "issue",
@@ -164,6 +174,54 @@ export default async function InventoryPage({
           operations={operations}
           labels={labels}
         />
+        <section className="inventory-replenishment">
+          <h2>{labels.replenishment}</h2>
+          <p>{labels.replenishmentDescription}</p>
+          {replenishment?.length ? (
+            <div className="inventory-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{labels.medication}</th>
+                    <th>{labels.location}</th>
+                    <th>{labels.current}</th>
+                    <th>{labels.reorderThreshold}</th>
+                    <th>{labels.recommended}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {replenishment.map((row) => {
+                    const item = directory.items.items.find(
+                      (candidate) => candidate.itemId === row.itemId,
+                    );
+                    const location = directory.locations.items.find(
+                      (candidate) => candidate.locationId === row.locationId,
+                    );
+                    return (
+                      <tr key={row.configurationId}>
+                        <td>{item?.itemCode ?? row.itemId}</td>
+                        <td>{location?.displayName ?? row.locationId}</td>
+                        <td>
+                          {row.currentQuantity} {row.unit}
+                        </td>
+                        <td>
+                          {row.reorderThreshold} {row.unit}
+                        </td>
+                        <td>
+                          {row.recommendedQuantity} {row.unit}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : replenishment ? (
+            <p>{labels.noReplenishment}</p>
+          ) : (
+            <p>{labels.replenishmentUnavailable}</p>
+          )}
+        </section>
         <section className="inventory-reconciliation">
           <h2>{labels.reconciliation}</h2>
           <p>{labels.reconciliationDescription}</p>
