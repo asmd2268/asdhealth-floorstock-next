@@ -174,6 +174,13 @@ export interface Dictionary {
     healthy: string;
     anomalies: string;
     reconciliationUnavailable: string;
+    replenishment: string;
+    replenishmentDescription: string;
+    noReplenishment: string;
+    replenishmentUnavailable: string;
+    current: string;
+    reorderThreshold: string;
+    recommended: string;
     provisioning: {
       title: string;
       description: string;
@@ -478,6 +485,15 @@ const en: Dictionary = {
     healthy: "No integrity anomalies were found.",
     anomalies: "Anomalies",
     reconciliationUnavailable: "Reconciliation is temporarily unavailable.",
+    replenishment: "Replenishment recommendations",
+    replenishmentDescription:
+      "Bounded facility-scoped recommendations from active floor-stock thresholds and balances.",
+    noReplenishment: "No replenishment is currently recommended.",
+    replenishmentUnavailable:
+      "Replenishment recommendations are temporarily unavailable.",
+    current: "Current",
+    reorderThreshold: "Reorder threshold",
+    recommended: "Recommended",
     provisioning: {
       title: "Inventory provisioning",
       description:
@@ -806,6 +822,14 @@ const ar: Dictionary = {
     healthy: "لم يتم العثور على أي خلل في السلامة.",
     anomalies: "الاختلالات",
     reconciliationUnavailable: "فحص السلامة غير متاح مؤقتًا.",
+    replenishment: "توصيات إعادة التزويد",
+    replenishmentDescription:
+      "توصيات محدودة النطاق للمنشأة مستخلصة من حدود مخزون الأقسام والأرصدة الحالية.",
+    noReplenishment: "لا توجد توصية بإعادة التزويد حاليًا.",
+    replenishmentUnavailable: "توصيات إعادة التزويد غير متاحة مؤقتًا.",
+    current: "الحالي",
+    reorderThreshold: "حد إعادة الطلب",
+    recommended: "الموصى به",
     provisioning: {
       title: "تزويد بيانات المخزون",
       description:

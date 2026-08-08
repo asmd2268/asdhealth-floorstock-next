@@ -10,6 +10,7 @@ import {
 import {
   inventoryBalanceSchema,
   inventoryLocationSchema,
+  floorStockConfigurationSchema,
   inventoryTransactionLineSchema,
   inventoryTransactionSchema,
   medicationItemSchema,
@@ -29,6 +30,8 @@ import type {
   InventoryTransactionLineRecord,
 } from "@/domain/inventory/types";
 import type { InventoryReconciliationReport } from "@/domain/inventory/reconciliation";
+import { calculateReplenishmentRecommendation } from "@/domain/inventory/replenishment";
+import type { InventoryReplenishmentRecommendation } from "@/domain/inventory/replenishment";
 import { getFirebaseAdminApp } from "@/server/firebase-admin/app";
 import { requireCanonicalTrustedIdentifier } from "@/services/firebase/trusted-identifier";
 
@@ -39,6 +42,7 @@ export interface InventoryDirectorySnapshot {
   locations: InventoryPage<InventoryLocationSummary>;
   balances: InventoryPage<InventoryBalanceSummary>;
   transactions: InventoryPage<InventoryTransactionSummary>;
+  replenishment: readonly InventoryReplenishmentRecommendation[];
 }
 
 export interface InventoryDirectoryCursors {
@@ -263,7 +267,80 @@ export function createInventoryQueryRepository(firestore: Firestore) {
           ),
           nextCursor: transactionPage.nextCursor,
         },
+        replenishment: [],
       };
+    },
+    async replenishment(
+      context: InventoryActorContext,
+    ): Promise<readonly InventoryReplenishmentRecommendation[]> {
+      const [configSnapshot, itemSnapshot, balanceSnapshot] = await Promise.all(
+        [
+          firestore
+            .collection(inventoryCollections.configurations)
+            .where("tenantId", "==", context.tenantId)
+            .where("facilityId", "==", context.activeFacilityId)
+            .where("status", "==", "active")
+            .orderBy(FieldPath.documentId())
+            .limit(51)
+            .get(),
+          firestore
+            .collection(inventoryCollections.items)
+            .where("tenantId", "==", context.tenantId)
+            .where("status", "==", "active")
+            .orderBy(FieldPath.documentId())
+            .limit(51)
+            .get(),
+          firestore
+            .collection(inventoryCollections.balances)
+            .where("tenantId", "==", context.tenantId)
+            .where("facilityId", "==", context.activeFacilityId)
+            .orderBy(FieldPath.documentId())
+            .limit(201)
+            .get(),
+        ],
+      );
+      if (
+        configSnapshot.size >= 51 ||
+        itemSnapshot.size >= 51 ||
+        balanceSnapshot.size >= 201
+      )
+        throw new Error("Inventory replenishment read limit exceeded");
+      const configurations = configSnapshot.docs.map((doc) => {
+        const value = floorStockConfigurationSchema.parse(doc.data());
+        if (
+          value.configurationId !== doc.id ||
+          value.tenantId !== context.tenantId ||
+          value.facilityId !== context.activeFacilityId
+        )
+          throw new Error("Configuration scope mismatch");
+        return value;
+      });
+      const items = itemSnapshot.docs.map((doc) => {
+        const value = medicationItemSchema.parse(doc.data());
+        if (value.itemId !== doc.id || value.tenantId !== context.tenantId)
+          throw new Error("Item scope mismatch");
+        return value;
+      });
+      const balances = balanceSnapshot.docs.map((doc) => {
+        const value = inventoryBalanceSchema.parse(doc.data());
+        if (
+          value.balanceId !== doc.id ||
+          value.tenantId !== context.tenantId ||
+          value.facilityId !== context.activeFacilityId
+        )
+          throw new Error("Balance scope mismatch");
+        return value;
+      });
+      const itemById = new Map(items.map((item) => [item.itemId, item]));
+      return configurations.map((configuration) => {
+        const item = itemById.get(configuration.itemId);
+        if (!item) throw new Error("Configuration item not found");
+        return calculateReplenishmentRecommendation(
+          configuration,
+          item,
+          balances,
+        );
+      });
     },
     async reconcile(
       context: InventoryActorContext,
