@@ -9,12 +9,14 @@ import type {
 } from "@/domain/inventory/types";
 import { parseJsonWithoutDuplicateKeys } from "@/server/session/json";
 import { getServerSessionEnvironment } from "@/server/session/environment";
+import { createFixedWindowRateLimiter } from "@/server/security/rate-limit";
 
 import { resolveInventoryContext } from "./context";
 import { getInventoryService } from "./composition";
 
 export const INVENTORY_BODY_LIMIT = 32_768;
 export const INVENTORY_CSRF_HEADER = "x-asdhealth-inventory-action";
+export const INVENTORY_RATE_LIMITER = createFixedWindowRateLimiter(60, 60_000);
 
 const status = {
   invalid_request: 400,
@@ -113,6 +115,17 @@ export async function handleInventoryMutation(
       operation,
     );
     if (!context.ok) return failure(context.code);
+    const decision = INVENTORY_RATE_LIMITER.check(
+      `${context.value.tenantId}:${context.value.uid}`,
+    );
+    if (!decision.allowed)
+      return new Response(null, {
+        status: 429,
+        headers: {
+          "Retry-After": String(decision.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      });
     let body: unknown;
     try {
       body = await readBody(request, length);

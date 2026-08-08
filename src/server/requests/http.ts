@@ -9,6 +9,7 @@ import type {
 } from "@/domain/requests/types";
 import { getServerSessionEnvironment } from "@/server/session/environment";
 import { parseJsonWithoutDuplicateKeys } from "@/server/session/json";
+import { createFixedWindowRateLimiter } from "@/server/security/rate-limit";
 
 import { getFloorStockRequestService } from "./composition";
 import { resolveFloorStockRequestContext } from "./context";
@@ -16,6 +17,10 @@ import { resolveFloorStockRequestContext } from "./context";
 export const FLOOR_STOCK_REQUEST_BODY_LIMIT = 32_768;
 export const FLOOR_STOCK_REQUEST_CSRF_HEADER =
   "x-asdhealth-floor-stock-request-action";
+export const FLOOR_STOCK_REQUEST_RATE_LIMITER = createFixedWindowRateLimiter(
+  30,
+  60_000,
+);
 
 const statuses = {
   invalid_request: 400,
@@ -133,6 +138,17 @@ export async function handleFloorStockRequestMutation(
       operation,
     );
     if (!context.ok) return failure(context.code);
+    const decision = FLOOR_STOCK_REQUEST_RATE_LIMITER.check(
+      `${context.value.tenantId}:${context.value.uid}`,
+    );
+    if (!decision.allowed)
+      return new Response(null, {
+        status: 429,
+        headers: {
+          "Retry-After": String(decision.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      });
     let body: unknown;
     try {
       body = await readBody(request, length);
