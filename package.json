@@ -11,6 +11,7 @@
     "test:run": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-asdhealth-floorstock-rules \"vitest run --config vitest.rules.config.ts\"",
     "preflight:production": "node scripts/production-readiness.mjs",
+    "preflight:operations": "node scripts/operational-readiness.mjs",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
