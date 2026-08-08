@@ -53,6 +53,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Production readiness preflight
+        run: npm run preflight:production
+
       - name: Test
         run: npm run test:run
 
